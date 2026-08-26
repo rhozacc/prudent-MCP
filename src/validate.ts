@@ -23,6 +23,8 @@ import type {
   Check,
   Playbook,
   Regulation,
+  Source,
+  SourceId,
   Test,
 } from "./schema.ts";
 
@@ -31,6 +33,23 @@ export interface CorpusInput {
   tests: Test[];
   checks: Check[];
   playbooks: Playbook[];
+}
+
+// --- Source currency ----------------------------------------------------------
+
+/** A current source whose `verified` date is older than this many days is stale. */
+export const STALE_AFTER_DAYS = 30;
+
+/**
+ * IDs of current sources whose `verified` date is more than STALE_AFTER_DAYS
+ * old. Dates compare lexicographically as ISO strings (the convention across
+ * the codebase); `now` is injectable so tests stay deterministic.
+ */
+export function staleSourceIds(sources: Source[], now: Date = new Date()): SourceId[] {
+  const cutoff = new Date(now.getTime() - STALE_AFTER_DAYS * 86_400_000).toISOString().slice(0, 10);
+  return sources
+    .filter((s) => s.status === "current" && s.verified < cutoff)
+    .map((s) => s.id);
 }
 
 /**

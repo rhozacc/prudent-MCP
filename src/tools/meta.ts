@@ -1,5 +1,5 @@
 /**
- * Cross-cutting tools — operate across all four surfaces.
+ * Cross-cutting tools — operate across all five surfaces.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -197,7 +197,9 @@ export function registerMetaTools(server: McpServer): void {
     {
       description:
         "What's loaded right now. Tells Claude what's actually queryable. " +
-        "Returns { last_updated, counts: {regulation, test, check, playbook}, coverage: [...] }.",
+        "Returns { last_updated, counts: {regulation, test, check, playbook, source}, " +
+        "coverage: [...], stale_sources: [...] } — stale_sources lists current sources " +
+        "whose verified date is older than 30 days; follow up with list_sources.",
       inputSchema: {},
     },
     async () => asJson(await adapters.meta.info()),

@@ -151,7 +151,7 @@ export type Source = z.infer<typeof SourceSchema>;
 
 // --- Cross-cutting types -----------------------------------------------------
 
-export const SurfaceSchema = z.enum(["regulation", "test", "check", "playbook"]);
+export const SurfaceSchema = z.enum(["regulation", "test", "check", "playbook", "source"]);
 export type Surface = z.infer<typeof SurfaceSchema>;
 
 export const ReferrersSchema = z.object({
@@ -166,6 +166,10 @@ export const CorpusInfoSchema = z.object({
   last_updated: z.string().datetime(),
   counts: z.record(SurfaceSchema, z.number()),
   coverage: z.array(z.string()),         // e.g. ["CRR", "EBA-GL-2017-16"]
+  // Current sources whose `verified` is older than STALE_AFTER_DAYS (see
+  // src/validate.ts) — computed at serve time, never stored; the default only
+  // keeps stored corpus_info blocks parseable.
+  stale_sources: z.array(sourceIdSchema).default([]),
 });
 export type CorpusInfo = z.infer<typeof CorpusInfoSchema>;
 

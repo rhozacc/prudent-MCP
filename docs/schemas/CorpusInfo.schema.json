@@ -18,7 +18,8 @@
               "regulation",
               "test",
               "check",
-              "playbook"
+              "playbook",
+              "source"
             ]
           }
         },
@@ -27,6 +28,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "stale_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^source:\\/\\/.+"
+          },
+          "default": []
         }
       },
       "required": [

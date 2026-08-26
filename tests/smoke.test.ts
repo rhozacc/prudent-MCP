@@ -10,15 +10,15 @@ describe("server registration", () => {
     expect(server).toBeDefined();
   });
 
-  it("registers the expected surface area (17 tools, 4 resource templates, 3 prompts)", () => {
+  it("registers the expected surface area (19 tools, 5 resource templates, 3 prompts)", () => {
     const server = createServer();
     const s = server as unknown as {
       _registeredTools: Record<string, unknown>;
       _registeredResourceTemplates: Record<string, unknown>;
       _registeredPrompts: Record<string, unknown>;
     };
-    expect(Object.keys(s._registeredTools).length).toBe(17);
-    expect(Object.keys(s._registeredResourceTemplates).length).toBe(4);
+    expect(Object.keys(s._registeredTools).length).toBe(19);
+    expect(Object.keys(s._registeredResourceTemplates).length).toBe(5);
     expect(Object.keys(s._registeredPrompts).length).toBe(3);
   });
 

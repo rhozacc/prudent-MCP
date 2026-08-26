@@ -18,6 +18,7 @@ import type {
   MetaAdapter,
   PlaybookAdapter,
   RegulationAdapter,
+  SourceAdapter,
   TestAdapter,
 } from "../src/adapters.ts";
 import type {
@@ -28,10 +29,13 @@ import type {
   Regulation,
   RegulationId,
   ReviewArea,
+  Source,
+  SourceId,
   Test,
   TestId,
 } from "../src/schema.ts";
 import { createServer } from "../src/server.ts";
+import { staleSourceIds } from "../src/validate.ts";
 
 // ============================================================================
 // Seed data — one cohesive slice (PD calibration + default definition aside)
@@ -359,6 +363,8 @@ const REVIEW_AREAS: ReviewArea[] = [
   { id: "discriminatory-power", name: "Discriminatory Power", children: [] },
 ];
 
+const SOURCES: Record<SourceId, Source> = {};
+
 // ============================================================================
 // Adapter implementations
 // ============================================================================
@@ -414,6 +420,17 @@ const inMemoryPlaybook: PlaybookAdapter = {
   },
 };
 
+const inMemorySource: SourceAdapter = {
+  async list(filter) {
+    const status = filter?.status;
+    const all = Object.values(SOURCES);
+    return status === undefined ? all : all.filter((s) => s.status === status);
+  },
+  async get(id) {
+    return SOURCES[id] ?? null;
+  },
+};
+
 const inMemoryMeta: MetaAdapter = {
   async info() {
     return {
@@ -423,8 +440,10 @@ const inMemoryMeta: MetaAdapter = {
         test: Object.keys(TESTS).length,
         check: Object.keys(CHECKS).length,
         playbook: Object.keys(PLAYBOOKS).length,
+        source: Object.keys(SOURCES).length,
       },
       coverage: ["CRR", "EBA-GL-2017-16"],
+      stale_sources: staleSourceIds(Object.values(SOURCES)),
     };
   },
   async referrers(id) {
@@ -459,6 +478,7 @@ adapters.regulation = inMemoryRegulation;
 adapters.test = inMemoryTest;
 adapters.check = inMemoryCheck;
 adapters.playbook = inMemoryPlaybook;
+adapters.source = inMemorySource;
 adapters.meta = inMemoryMeta;
 
 export const demoServer = createServer();

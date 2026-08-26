@@ -22,6 +22,9 @@ import type {
   Regulation,
   RegulationId,
   ReviewArea,
+  Source,
+  SourceId,
+  SourceStatus,
   Test,
   TestId,
 } from "./schema.ts";
@@ -48,6 +51,13 @@ export interface CheckAdapter {
 export interface PlaybookAdapter {
   search(query: string): Promise<Playbook[]>;
   get(id: PlaybookId): Promise<Playbook | null>;
+}
+
+// The registry is small and list-shaped, so unlike the content surfaces this
+// adapter lists (optionally by status) rather than full-text searching.
+export interface SourceAdapter {
+  list(filter?: { status?: SourceStatus }): Promise<Source[]>;
+  get(id: SourceId): Promise<Source | null>;
 }
 
 export interface MetaAdapter {
@@ -79,12 +89,18 @@ const emptyPlaybook: PlaybookAdapter = {
   async get() { return null; },
 };
 
+const emptySource: SourceAdapter = {
+  async list() { return []; },
+  async get() { return null; },
+};
+
 const emptyMeta: MetaAdapter = {
   async info() {
     return {
       last_updated: new Date().toISOString(),
-      counts: { regulation: 0, test: 0, check: 0, playbook: 0 },
+      counts: { regulation: 0, test: 0, check: 0, playbook: 0, source: 0 },
       coverage: [],
+      stale_sources: [],
     };
   },
   async referrers() {
@@ -101,5 +117,6 @@ export const adapters = {
   test: emptyTest,
   check: emptyCheck,
   playbook: emptyPlaybook,
+  source: emptySource,
   meta: emptyMeta,
 };

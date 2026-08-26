@@ -615,7 +615,8 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
               "regulation",
               "test",
               "check",
-              "playbook"
+              "playbook",
+              "source"
             ]
           }
         },
@@ -624,6 +625,14 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
           "items": {
             "type": "string"
           }
+        },
+        "stale_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^source:\\/\\/.+"
+          },
+          "default": []
         }
       },
       "required": [
