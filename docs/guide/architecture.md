@@ -1,6 +1,6 @@
 # Architecture
 
-Three views: the surface map (how the four kinds of record reference each other), the schema (every field on every type), and the request lifecycle (what happens when a client calls a tool).
+Three views: the surface map (how the content surfaces reference each other — sources sit outside the reference graph, joined to regulation by `document_id` instead), the schema (every field on every type), and the request lifecycle (what happens when a client calls a tool).
 
 ## Surface map
 
@@ -235,7 +235,7 @@ The `adapters` object is the seam. Default implementations return empty; `exampl
 | Concern | Lives where |
 |---|---|
 | Tool/resource/prompt registration | `src/server.ts` |
-| Per-surface tool handlers | `src/tools/{regulation,tests,checks,playbooks}.ts` |
+| Per-surface tool handlers | `src/tools/{regulation,tests,checks,playbooks,sources}.ts` |
 | Cross-cutting tools | `src/tools/meta.ts` |
 | Adapter interfaces + handle object | `src/adapters.ts` |
 | Schemas (zod + template literal types) | `src/schema.ts` |

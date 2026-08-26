@@ -3,7 +3,7 @@ layout: home
 hero:
   name: prudent-mcp
   text: IRB model validation knowledge layer
-  tagline: Structured access to regulation, tests, checks, and playbooks — for any MCP client.
+  tagline: Structured access to regulation, tests, checks, playbooks, and sources — for any MCP client.
   actions:
     - theme: brand
       text: Get Started
@@ -15,8 +15,8 @@ hero:
       text: View on GitHub
       link: https://github.com/rhozacc/prudent-mcp
 features:
-  - title: Four typed surfaces
-    details: Regulation, Tests, Checks, Playbooks — each with its own URI scheme and compile-time ID segregation.
+  - title: Five typed surfaces
+    details: Regulation, Tests, Checks, Playbooks, Sources — each with its own URI scheme and compile-time ID segregation.
   - title: Read-only knowledge layer
     details: Describes what regulation says and what a test measures. No execution, no writes, no orchestration.
   - title: Traceable to law
@@ -31,7 +31,7 @@ features:
 
 Validating an IRB model means cross-referencing a bank's documentation against a moving target: CRR articles, EBA guidelines, ECB guides, supervisor commentary, and statistical methodology. An LLM is well-suited to that cross-referencing — but only if it has **structured access to the source material** rather than relying on training-data recall.
 
-`prudent-mcp` is that source layer. Four surfaces, four URI schemes, typed end-to-end.
+`prudent-mcp` is that source layer. Five surfaces, five URI schemes, typed end-to-end.
 
 ## How a question flows through it
 

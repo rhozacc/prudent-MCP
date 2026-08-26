@@ -25,6 +25,11 @@ interface PlaybookAdapter {
   get(id: PlaybookId): Promise<Playbook | null>;
 }
 
+interface SourceAdapter {
+  list(filter?: { status?: SourceStatus }): Promise<Source[]>;
+  get(id: SourceId): Promise<Source | null>;
+}
+
 interface MetaAdapter {
   info(): Promise<CorpusInfo>;
   referrers(id: string): Promise<Referrers>;
@@ -45,6 +50,7 @@ adapters.regulation = new HttpRegulationAdapter("https://corpus.example.com");
 adapters.test   = new HttpTestAdapter(/* ... */);
 adapters.check  = new HttpCheckAdapter(/* ... */);
 adapters.playbook = new HttpPlaybookAdapter(/* ... */);
+adapters.source = new HttpSourceAdapter(/* ... */);
 adapters.meta   = new HttpMetaAdapter(/* ... */);
 
 import { createServer } from "prudent-mcp";
@@ -68,19 +74,21 @@ adapters.regulation = fa.regulation;
 adapters.test       = fa.test;
 adapters.check      = fa.check;
 adapters.playbook   = fa.playbook;
+adapters.source     = fa.source;
 adapters.meta       = fa.meta;
 ```
 
-The JSON is validated against the full zod schemas on load. `createFileAdapters` returns all five adapters backed by in-memory maps — `search` uses a full-JSON-stringify text scan, `get` is a direct map lookup.
+The JSON is validated against the full zod schemas on load. `createFileAdapters` returns all six adapters backed by in-memory maps — `search` uses a full-JSON-stringify text scan, `get` is a direct map lookup.
 
 ## The in-memory demo as a template
 
-`examples/inmemory-demo.ts` is the reference implementation for hand-coded adapters. It seeds a small slice of PD-calibration content into in-memory maps and implements all five adapter interfaces against them. Use it as the template when building your own backend.
+`examples/inmemory-demo.ts` is the reference implementation for hand-coded adapters. It seeds a small slice of PD-calibration content into in-memory maps and implements all six adapter interfaces against them. Use it as the template when building your own backend.
 
 Key things the demo shows:
 
 - **`search(query)`** — simple `Array.filter` + `.toLowerCase().includes()` against record fields
 - **`get(id, asOf?)`** — direct map lookup; `asOf` triggers version-history selection for regulation
+- **`list(filter?)`** — the sources surface lists (optionally by status) instead of searching
 - **`resolveCitation(text)`** — pattern-match on prose strings to structured IDs
 - **`referrers(id)`** — scan `Check.derived_from` and `Phase.references` to build back-references
 

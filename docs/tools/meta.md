@@ -1,6 +1,6 @@
 # Meta tools
 
-Nine cross-cutting tools that operate across all four surfaces. Defined in `src/tools/meta.ts`.
+Nine cross-cutting tools that operate across all five surfaces. Defined in `src/tools/meta.ts`.
 
 ---
 
@@ -20,22 +20,26 @@ What's loaded right now. Tells Claude what's actually queryable before it starts
     test: number;
     check: number;
     playbook: number;
+    source: number;
   };
   coverage: string[];         // e.g. ["CRR", "EBA-GL-2017-16"]
+  stale_sources: SourceId[];  // current sources whose verified date is >30 days old — computed, never stored
 }
 ```
 
 **Example:**
 ```ts
 get_corpus_info()
-→ { last_updated: "2024-10-01T00:00:00Z", counts: { regulation: 12, test: 3, check: 4, playbook: 2 }, coverage: ["CRR", "EBA-GL-2017-16"] }
+→ { last_updated: "2024-10-01T00:00:00Z", counts: { regulation: 12, test: 3, check: 4, playbook: 2, source: 5 }, coverage: ["CRR", "EBA-GL-2017-16"], stale_sources: ["source://eba/gl-2017-16"] }
 ```
+
+A non-empty `stale_sources` means the registry needs a maintenance run — follow up with `list_sources`.
 
 ---
 
 ## `get_referrers`
 
-Find everything in the corpus that references a given ID. Works on any surface — regulation, test, check, or playbook.
+Find everything in the corpus that references a given ID. Works on any content surface — regulation, test, check, or playbook. (Sources sit outside the reference graph; they join via `document_id` instead.)
 
 **Inputs:**
 

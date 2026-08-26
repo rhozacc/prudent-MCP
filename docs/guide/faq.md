@@ -34,7 +34,9 @@ You can add a surface or a field, but every change has implications for the type
 
 - Can a `Phase` reference an `Evidence` ID? If so, widen `Phase.references` to include `EvidenceId`.
 - Can a `Check.expected_evidence` reference an `Evidence` ID? Probably yes, with a typed array.
-- Does it need a reverse index in `Referrers`? Yes.
+- Does it need a reverse index in `Referrers`? Yes — if other surfaces reference it by ID.
+
+The sources surface is the counter-example: it deliberately stays outside the reference graph. No field on any content surface points at a source, `superseded_by` never leaves the registry, and the join to regulation is a computed `framework` + `document_id` string match. Follow that pattern when the new surface is a registry rather than referenced content.
 
 The right path is: prototype on a fork, get the type errors to settle, run the in-memory demo against the new shape, then propose.
 

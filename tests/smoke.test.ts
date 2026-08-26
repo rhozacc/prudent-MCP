@@ -201,3 +201,51 @@ describe("traversal tools", () => {
     expect(report.covered + report.uncovered.length).toBe(report.total_regulations);
   });
 });
+
+describe("sources surface", () => {
+  beforeAll(async () => {
+    await import("../examples/inmemory-demo.ts");
+  });
+
+  it("list_sources returns the seeded registry", async () => {
+    const all = await adapters.source.list();
+    expect(all.length).toBe(5);
+  });
+
+  it("list_sources filters by status", async () => {
+    const pending = await adapters.source.list({ status: "pending" });
+    expect(pending.map((s) => s.id)).toEqual(["source://eba/cp-2025-14"]);
+    const superseded = await adapters.source.list({ status: "superseded" });
+    expect(superseded.map((s) => s.id)).toEqual(["source://eba/cp-2016-21"]);
+  });
+
+  it("get_source resolves a record and misses cleanly", async () => {
+    const hit = await adapters.source.get("source://eba/gl-2017-16");
+    expect(hit?.document_id).toBe("eba-gl-2017-16");
+    expect(hit?.status).toBe("current");
+    expect(await adapters.source.get("source://eba/nope")).toBeNull();
+  });
+
+  it("the superseded seed points at a resolving current successor", async () => {
+    const old = await adapters.source.get("source://eba/cp-2016-21");
+    expect(old?.superseded_by).toBe("source://eba/gl-2017-16");
+    const successor = await adapters.source.get(old!.superseded_by!);
+    expect(successor?.status).toBe("current");
+  });
+
+  it("the pending seed carries chronological milestones (first = next)", async () => {
+    const pending = await adapters.source.get("source://eba/cp-2025-14");
+    expect(pending?.milestones[0]?.event).toBe("Consultation closes");
+    expect(pending?.milestones.length).toBe(2);
+  });
+
+  it("get_corpus_info counts sources and computes stale_sources", async () => {
+    const info = await adapters.meta.info();
+    // Explicit assertion because zod-3 records are Partial at the type level —
+    // the compiler never forces a source count into counts literals.
+    expect(info.counts.source).toBe(5);
+    // Exactly the deliberately-stale current seed; the superseded seed with an
+    // equally old verified date must stay out.
+    expect(info.stale_sources).toEqual(["source://eba/gl-2017-16"]);
+  });
+});

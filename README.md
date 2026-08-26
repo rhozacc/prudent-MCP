@@ -1,6 +1,6 @@
 [![prudent-mcp documentation](./docs/public/docs-hero.png)](https://rhozacc.github.io/prudent-mcp/)
 
-Prudent is an [MCP](https://modelcontextprotocol.io) server that gives any LLM client structured access to the IRB credit-risk model validation knowledge base — regulation, statistical tests, supervisor checks, and validation playbooks.
+Prudent is an [MCP](https://modelcontextprotocol.io) server that gives any LLM client structured access to the IRB credit-risk model validation knowledge base — regulation, statistical tests, supervisor checks, validation playbooks, and a registry of the source documents it all derives from.
 
 **[Documentation](https://rhozacc.github.io/prudent-mcp/)**
 
@@ -10,7 +10,7 @@ Prudent is an [MCP](https://modelcontextprotocol.io) server that gives any LLM c
 
 Validating an IRB model means cross-referencing a bank's documentation against a moving target: CRR articles, EBA guidelines, ECB guides, supervisor commentary, and statistical methodology. An LLM is well-suited to that cross-referencing — but only if it has structured access to the source material rather than relying on training-data recall.
 
-`prudent-mcp` is the read-only knowledge layer. It defines four surfaces, each with its own URI scheme, and exposes them through MCP's standard tool/resource/prompt protocol. Any compliant client (Claude Desktop, Claude Code, Cursor, custom integrations) can plug it in.
+`prudent-mcp` is the read-only knowledge layer. It defines five surfaces, each with its own URI scheme, and exposes them through MCP's standard tool/resource/prompt protocol. Any compliant client (Claude Desktop, Claude Code, Cursor, custom integrations) can plug it in.
 
 | Surface | URI scheme | Notes |
 |---|---|---|
@@ -18,6 +18,7 @@ Validating an IRB model means cross-referencing a bank's documentation against a
 | **Tests** | `test://{test-id}` | Statistical tests described — aliases and family grouping let Claude recognize bank-specific variants. Never executed. |
 | **Checks** | `check://{area}/{topic}[/{specific}]` | Qualitative checks with a concrete pass/fail bar, traced back to law via `derived_from: RegulationId[]`. |
 | **Playbooks** | `playbook://{area}[/{subarea}]` | Guided walkthroughs structured as ordered phases with mixed-surface references. |
+| **Sources** | `source://{framework}/{document-id}` | The regulatory-context registry: which documents the corpus derives from, whether each is current / pending / superseded, when currency was last verified, and what milestones approach. |
 
 The server does not run statistical tests, accept writes, or orchestrate workflows. Those concerns live elsewhere.
 
@@ -63,7 +64,7 @@ Drag `dist/prudent-mcp.mcpb` onto Claude Desktop. An optional install-time promp
 
 The adapters in this repo return empty results by default. `examples/inmemory-demo.ts` seeds a working slice of PD-calibration content and is the reference implementation for any backend.
 
-The curated **prudent corpus** — the full body of regulation, tests, checks, and playbooks — is a proprietary product shipped separately. See [Adapters](https://rhozacc.github.io/prudent-mcp/adapters/) for the interface contract.
+The curated **prudent corpus** — the full body of regulation, tests, checks, playbooks, and sources — is a proprietary product shipped separately. See [Adapters](https://rhozacc.github.io/prudent-mcp/adapters/) for the interface contract.
 
 ## Stack
 
