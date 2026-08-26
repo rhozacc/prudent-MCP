@@ -2,9 +2,11 @@
  * Corpus integrity invariants — extracted from scripts/validate-corpus.ts so
  * the checks are importable as a library.
  *
- * Pure functions, no I/O: pass in the four surface arrays (already loaded
- * through whatever adapter the caller has) and get back a list of human-
- * readable violations. Empty list ⇒ corpus is sound.
+ * Pure functions, no I/O: pass in the surface arrays (already loaded through
+ * whatever adapter the caller has) and get back a list of human-readable
+ * violations. Empty list ⇒ corpus is sound. Rules that depend on "today"
+ * take an injectable `now` (defaulting to the wall clock) so callers and
+ * tests stay deterministic.
  *
  * The CLI in scripts/validate-corpus.ts is now a thin wrapper around
  * `validateCorpus` — it loads adapters and prints results. Anyone else who
@@ -18,6 +20,12 @@
  *   3. No dangling references — every URI (children, parent, derived_from,
  *      regulatory_basis, regulatory_scope, phase references) resolves.
  *   4. No cycles in the regulation parent chain.
+ *   5. Source registry coherence — unique ids; superseded status and the
+ *      superseded_by pointer imply each other; pointers resolve and the
+ *      supersession chain is acyclic; verified dates are not in the future.
+ *
+ * Staleness (a current source whose `verified` is older than
+ * STALE_AFTER_DAYS) is advisory, not fatal — see `corpusWarnings`.
  */
 import type {
   Check,
@@ -33,6 +41,7 @@ export interface CorpusInput {
   tests: Test[];
   checks: Check[];
   playbooks: Playbook[];
+  sources?: Source[];   // optional so pre-sources callers keep working unchanged
 }
 
 // --- Source currency ----------------------------------------------------------
@@ -56,8 +65,8 @@ export function staleSourceIds(sources: Source[], now: Date = new Date()): Sourc
  * Validate a corpus and return a deduplicated list of human-readable
  * violations. Empty array means the corpus passes every invariant.
  */
-export function validateCorpus(corpus: CorpusInput): string[] {
-  const { regulation: regs, tests, checks, playbooks } = corpus;
+export function validateCorpus(corpus: CorpusInput, now: Date = new Date()): string[] {
+  const { regulation: regs, tests, checks, playbooks, sources = [] } = corpus;
 
   const regIds = new Set<string>(regs.map((r) => r.id));
   const checkIds = new Set<string>(checks.map((c) => c.id));
@@ -138,12 +147,65 @@ export function validateCorpus(corpus: CorpusInput): string[] {
     }
   }
 
+  // 5 — source registry coherence (currency layer). Unique ids get a rule the
+  // other surfaces don't have because supersession pointers make duplicates
+  // uniquely dangerous: two records with one id can't both be the chain target.
+  const sourceIds = new Set<string>();
+  for (const s of sources) {
+    if (sourceIds.has(s.id)) errors.push(`duplicate source id ${s.id}`);
+    sourceIds.add(s.id);
+  }
+  const sourceById = new Map<string, Source>(sources.map((s) => [s.id, s]));
+  const today = now.toISOString().slice(0, 10);
+  for (const s of sources) {
+    if (s.status === "superseded" && s.superseded_by === undefined) {
+      errors.push(`${s.id}: status superseded but superseded_by missing (supersession invariant)`);
+    }
+    if (s.superseded_by !== undefined) {
+      if (s.status !== "superseded") {
+        errors.push(`${s.id}: superseded_by set but status is ${s.status} (supersession invariant)`);
+      }
+      if (!sourceIds.has(s.superseded_by)) {
+        errors.push(`${s.id}: superseded_by ${s.superseded_by} does not resolve`);
+      }
+    }
+    if (s.verified > today) errors.push(`${s.id}: verified ${s.verified} is in the future`);
+  }
+  // Cycles in the supersession chain (a self-reference is the 1-cycle) — a
+  // cyclic chain never terminates at a current/pending document.
+  for (const s of sources) {
+    const seen = new Set<string>();
+    let cursor: string | undefined = s.id;
+    while (cursor !== undefined) {
+      if (seen.has(cursor)) {
+        errors.push(`supersession cycle reachable from ${s.id} (revisits ${cursor})`);
+        break;
+      }
+      seen.add(cursor);
+      cursor = sourceById.get(cursor)?.superseded_by;
+    }
+  }
+
   return [...new Set(errors)];
 }
 
 /**
+ * Advisory currency findings — separate from validateCorpus so callers and
+ * the CLI can keep them non-fatal: a stale source needs re-verification
+ * against the publisher, not a failed build.
+ */
+export function corpusWarnings(corpus: CorpusInput, now: Date = new Date()): string[] {
+  const sources = corpus.sources ?? [];
+  const byId = new Map(sources.map((s) => [s.id, s]));
+  return staleSourceIds(sources, now).map((id) => {
+    const s = byId.get(id)!;
+    return `${id}: verified ${s.verified} is older than ${STALE_AFTER_DAYS} days (stale)`;
+  });
+}
+
+/**
  * Convenience wrapper for callers who hold a CorpusFile (the on-disk shape
- * produced by loadCorpusFile). Picks the four surface arrays and runs
+ * produced by loadCorpusFile). Picks the surface arrays and runs
  * validateCorpus.
  */
 export function validateCorpusFile(corpus: {
@@ -151,11 +213,13 @@ export function validateCorpusFile(corpus: {
   tests: Test[];
   checks: Check[];
   playbooks: Playbook[];
+  sources?: Source[];
 }): string[] {
   return validateCorpus({
     regulation: corpus.regulation,
     tests: corpus.tests,
     checks: corpus.checks,
     playbooks: corpus.playbooks,
+    ...(corpus.sources !== undefined ? { sources: corpus.sources } : {}),
   });
 }
