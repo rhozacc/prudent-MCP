@@ -327,6 +327,110 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
 
 </details>
 
+<details>
+<summary><code>Source</code></summary>
+
+```json
+{
+  "$ref": "#/definitions/Source",
+  "definitions": {
+    "Source": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^source:\\/\\/.+"
+        },
+        "title": {
+          "type": "string"
+        },
+        "framework": {
+          "type": "string"
+        },
+        "document_id": {
+          "type": "string"
+        },
+        "doc_type": {
+          "type": "string",
+          "enum": [
+            "regulation",
+            "guideline",
+            "guide",
+            "consultation",
+            "statement",
+            "report",
+            "other"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "current",
+            "pending",
+            "superseded"
+          ]
+        },
+        "published": {
+          "type": "string",
+          "format": "date"
+        },
+        "effective_from": {
+          "type": "string",
+          "format": "date"
+        },
+        "verified": {
+          "type": "string",
+          "format": "date"
+        },
+        "superseded_by": {
+          "type": "string",
+          "pattern": "^source:\\/\\/.+"
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "event": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "date",
+              "event"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "url": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "framework",
+        "document_id",
+        "doc_type",
+        "status",
+        "verified"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
+```
+
+</details>
+
 ## Supporting types
 
 <details>
@@ -407,6 +511,36 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
       "required": [
         "name",
         "description"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
+```
+
+</details>
+
+<details>
+<summary><code>Milestone</code></summary>
+
+```json
+{
+  "$ref": "#/definitions/Milestone",
+  "definitions": {
+    "Milestone": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "event"
       ],
       "additionalProperties": false
     }

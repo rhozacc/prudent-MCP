@@ -1,5 +1,5 @@
 /**
- * Schemas for the four surfaces and supporting types.
+ * Schemas for the five surfaces and supporting types.
  *
  * The TypeScript payoff over the Python version: template literal types on
  * URIs make cross-surface ID confusion a compile error.
@@ -19,8 +19,13 @@ export type RegulationId = `regulation://${string}`;
 export type TestId = `test://${string}`;
 export type CheckId = `check://${string}`;
 export type PlaybookId = `playbook://${string}`;
+export type SourceId = `source://${string}`;
 
-/** Any cross-surface reference — useful for things like Phase.references. */
+/**
+ * Any cross-surface reference — useful for things like Phase.references.
+ * SourceId is deliberately excluded: sources join the content surfaces by
+ * framework/document_id, never by URI reference.
+ */
 export type AnyId = RegulationId | TestId | CheckId | PlaybookId;
 
 /**
@@ -35,6 +40,7 @@ const regulationIdSchema = z.string().regex(/^regulation:\/\/.+/) as z.ZodType<R
 const testIdSchema = z.string().regex(/^test:\/\/.+/) as z.ZodType<TestId>;
 const checkIdSchema = z.string().regex(/^check:\/\/.+/) as z.ZodType<CheckId>;
 const playbookIdSchema = z.string().regex(/^playbook:\/\/.+/) as z.ZodType<PlaybookId>;
+const sourceIdSchema = z.string().regex(/^source:\/\/.+/) as z.ZodType<SourceId>;
 const anyIdSchema = z.union([regulationIdSchema, testIdSchema, checkIdSchema, playbookIdSchema]);
 const regulationChildIdSchema = z.union([regulationIdSchema, testIdSchema, checkIdSchema]);
 
@@ -112,6 +118,37 @@ export const PlaybookSchema = z.object({
 });
 export type Playbook = z.infer<typeof PlaybookSchema>;
 
+// --- Source registry (latest only — supersession is a status + pointer) -------
+
+export const MilestoneSchema = z.object({
+  date: z.string(),                      // display string — "2026-10-19" or "Q4 2026"; never Date-parsed
+  event: z.string(),                     // e.g. "Consultation closes"
+});
+export type Milestone = z.infer<typeof MilestoneSchema>;
+
+export const SourceStatusSchema = z.enum(["current", "pending", "superseded"]);
+export type SourceStatus = z.infer<typeof SourceStatusSchema>;
+
+export const SourceSchema = z.object({
+  id: sourceIdSchema,                    // source://{framework}/{document-id}, e.g. source://eba/gl-2017-16
+  title: z.string(),                     // human-readable, e.g. "EBA-GL-2017-16 PD/LGD Estimation Guidelines"
+  framework: z.string(),                 // "eba" | "ecb" | "crr" | ... — matches Regulation.framework
+  document_id: z.string(),               // joins to Regulation.document_id (soft join, computed where needed)
+  doc_type: z.enum(["regulation", "guideline", "guide", "consultation", "statement", "report", "other"]),
+  status: SourceStatusSchema,
+  published: z.string().date().optional(),
+  effective_from: z.string().date().optional(),
+  verified: z.string().date(),           // last date currency was confirmed against the publisher
+  superseded_by: sourceIdSchema.optional(),  // set iff status is "superseded"
+  // Upcoming regulatory dates, kept in chronological order — the first entry is
+  // the next milestone; the maintenance workflow prunes past entries.
+  milestones: z.array(MilestoneSchema).default([]),
+  url: z.string().optional(),
+  notes: z.string().optional(),
+  // Future fields: supersedes, celex_id, ...
+});
+export type Source = z.infer<typeof SourceSchema>;
+
 // --- Cross-cutting types -----------------------------------------------------
 
 export const SurfaceSchema = z.enum(["regulation", "test", "check", "playbook"]);
@@ -146,6 +183,7 @@ export {
   testIdSchema,
   checkIdSchema,
   playbookIdSchema,
+  sourceIdSchema,
   anyIdSchema,
   regulationChildIdSchema,
 };
