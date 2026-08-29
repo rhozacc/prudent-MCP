@@ -8,22 +8,24 @@ The tests surface describes statistical tests — what they measure, when to use
 
 ## `search_tests`
 
-Full-text search across the catalog of described statistical tests.
+Ranked, field-scoped search across the catalog of described statistical tests: name and aliases (weight 3), family and purpose (2), acceptance criteria (1).
 
 **Inputs:**
 
 | Parameter | Type | Notes |
 |---|---|---|
-| `query` | `string` | Matches against name, aliases, purpose, and family |
+| `query` | `string` | Minimum 2 characters |
+| `limit` / `offset` | `number` | Optional paging (default 20 per page) |
+| `detail` | `"concise" \| "full"` | Optional, default `"concise"` |
 
-**Returns:** `Test[]`
+**Returns:** the shared envelope `{ results, total_matches, offset, truncated }`. Concise results are `{ id, name, family, purpose_first_sentence }`; `detail: "full"` serves complete records.
 
-Particularly useful for matching bank-specific test names to corpus entries — banks often use variant names for the same underlying method. The `family` field is the equivalence key.
+Particularly useful for matching bank-specific test names to corpus entries — banks often use variant names for the same underlying method, and `aliases` is weighted like `name`. The `family` field is the equivalence key.
 
 **Example:**
 ```ts
 search_tests("chi-squared decile")
-→ [{ id: "test://hosmer-lemeshow", name: "Hosmer-Lemeshow test", aliases: ["HL test", "HL chi-squared", "modified HL"], family: "calibration-grouped" }]
+→ { results: [{ id: "test://hosmer-lemeshow", name: "Hosmer-Lemeshow test", family: "calibration-grouped", purpose_first_sentence: "Goodness-of-fit test that groups predictions into buckets…" }], total_matches: 1, offset: 0, truncated: false }
 ```
 
 ---
@@ -38,7 +40,7 @@ Fetch a test by ID.
 |---|---|---|
 | `id` | `TestId` | e.g. `test://jeffreys` |
 
-**Returns:** `Test | null`
+**Returns:** `Test` — unknown ids are an `isError` result pointing at `search_tests`.
 
 ```ts
 type Test = {

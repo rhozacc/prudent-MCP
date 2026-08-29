@@ -15,10 +15,12 @@ src/
 ├── server.ts              MCP server + explicit registration of every module
 ├── schema.ts              zod schemas + template literal URI types
 ├── adapters.ts            interfaces per surface + empty defaults + handles
-├── file-adapter.ts        file-based adapters loaded from a corpus JSON file
-├── mcpb-entry.ts          MCPB entry point (wires file-adapter or empty defaults)
-├── resources.ts           URI templates mirroring the schemes
-├── tools/                 meta (incl. traversal tools) + one file per surface
+├── file-adapter.ts        file-based adapters loaded from a corpus JSON file (incl. regulation_history + resolveCitationIn)
+├── mcpb-entry.ts          MCPB entry point (wires file-adapter or empty defaults; startup integrity gate)
+├── referrers.ts           computeReferrers — the ONE reverse index every adapter delegates to
+├── search.ts              rankedSearch + per-surface field sets — the ONE ranking definition
+├── resources.ts           URI templates mirroring the schemes (completions; misses are -32002)
+├── tools/                 meta (incl. traversal tools) + one file per surface + shared.ts (envelopes, annotations, leniency)
 └── prompts/               three prompt scaffolds
 
 manifest.json              MCPB manifest v0.4
@@ -60,6 +62,8 @@ Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime 
 - `Check.derived_from` + `Check.expectation` + `Check.expected_evidence` — traceability from supervisor expectations back to law, plus the concrete artifacts a reviewer must gather. Without `derived_from`, a Check is opinion. Without `expected_evidence`, it's underspecified.
 - **Check URI shape** — `check://{area}/{topic}[/{specific}]` (e.g. `check://calibration/pd/lra-derived`). Hierarchical, consistent with `regulation://`. Don't flatten back to `check://slug`.
 - **`Source` is a currency registry, not referenced content** — `source://{framework}/{document-id}`, latest-only (supersession = `status` + `superseded_by`, linter-enforced: the two imply each other, pointers resolve, chains are acyclic). It stays out of `children`, `get_referrers`, `AnyId`, and the mirror invariant; the join to regulation is `framework` + `document_id` string equality, computed where needed. `verified` drives the 30-day staleness surfaced by `get_corpus_info.stale_sources` and `bun run validate` warnings; `milestones` are chronological display strings (never parsed) and `milestones[0]` is served as `next_milestone`. Maintenance = `/maintain-context` session edits gated by the linter, never write tools.
+- **`list()` vs `search()` on every content adapter** — `list()` returns ALL records and is the enumeration/traversal contract (cross-cutting tools, scripts, validators, completions). `search(query)` is ranked, field-scoped relevance search via `src/search.ts` (`rankedSearch`, per-surface field sets, 20-match default cap); an empty/whitespace query returns `[]`. Never lean on `search("")` to enumerate — that undocumented contract is gone, and the tool layer rejects sub-2-char queries anyway. The one-call corpus dump mattered: the corpus is the paid product.
+- **`regulation_history` + the `as_of` rule** — the corpus file's optional `regulation_history` key (`{ id, effective_from, record }` entries) powers `get(id, asOf)`: no history for the id → current record (corpora without history behave exactly as before); history present → last entry with `effective_from <= asOf`; asOf predating every entry → `null`, never current text served as historical. The current version is asOf-selectable only via a current-boundary entry. `RegulationHistoryEntrySchema` is exported but deliberately NOT in `scripts/schema-registry.ts` (it's file-format plumbing, not a surface schema).
 - `Test.family` + `Test.aliases` + `Test.acceptance_criteria` — equivalence reasoning across bank-specific test variants.
 - `Regulation.commentary` — interpretive material (Q&A, supervisor letters), source-attributed.
 - `Playbook.phases` — structured walkthrough with mixed-surface references in each phase.
@@ -76,7 +80,6 @@ Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime 
 
 ## Don't add (yet)
 
-- Excerpt rendering on `search_*` results.
 - Authentication, rate limiting, telemetry.
 - More reference adapters under `examples/`. The in-memory demo is the template; backend-specific adapters belong outside this repo.
 - More prompts beyond the existing three scaffolds.

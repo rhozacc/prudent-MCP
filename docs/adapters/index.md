@@ -8,21 +8,25 @@ The MCP server reaches its corpus through a small set of adapter interfaces defi
 interface RegulationAdapter {
   search(query: string): Promise<Regulation[]>;
   get(id: RegulationId, asOf?: string): Promise<Regulation | null>;
+  list(): Promise<Regulation[]>;
 }
 
 interface TestAdapter {
   search(query: string): Promise<Test[]>;
   get(id: TestId): Promise<Test | null>;
+  list(): Promise<Test[]>;
 }
 
 interface CheckAdapter {
   search(query: string): Promise<Check[]>;
   get(id: CheckId): Promise<Check | null>;
+  list(): Promise<Check[]>;
 }
 
 interface PlaybookAdapter {
   search(query: string): Promise<Playbook[]>;
   get(id: PlaybookId): Promise<Playbook | null>;
+  list(): Promise<Playbook[]>;
 }
 
 interface SourceAdapter {
@@ -37,6 +41,21 @@ interface MetaAdapter {
   taxonomy(): Promise<ReviewArea[]>;
 }
 ```
+
+## `list()` vs `search()`
+
+Two different contracts on every content surface — do not conflate them:
+
+- **`list()` returns ALL records.** It is the internal enumeration and traversal contract: the cross-cutting tools (`get_coverage_gaps`, `get_area_overview`), corpus scripts, validators, and resource completions call it when they genuinely need everything.
+- **`search(query)` is ranked relevance search for a real query.** It never dumps the corpus: an empty or whitespace-only query returns `[]`. The old undocumented `search("")` → everything contract is gone — anything that leaned on it must call `list()` instead.
+
+Search semantics are defined once, in `src/search.ts` (`rankedSearch` plus per-surface field sets), and shared by the file adapter and the in-memory demo. The contract:
+
+- The query is tokenized (lowercased, split on non-alphanumerics). Only the declared fields are scanned, each with a weight — a query never matches JSON keys or URI scheme prefixes. For regulation, record ids join the field set (at low weight) only when the query itself looks URI-like, so a prose query like "regulation" no longer matches 100% of records.
+- Score = weight × occurrences; whole-word occurrences count full weight, substring-only occurrences half. Results sort by score descending, ties by input order — fully deterministic.
+- `rankedSearch` caps at 20 results by default. Each match carries `{ record, score, matched: { field, excerpt } }`; the built-in adapters return the records, and `search_regulation` re-ranks locally to attach `matched_excerpt` to its concise hits.
+
+An external backend that wants ranking parity should call `rankedSearch` with the exported field sets rather than reinventing the scoring.
 
 ## Connecting a corpus
 
@@ -78,7 +97,7 @@ adapters.source     = fa.source;
 adapters.meta       = fa.meta;
 ```
 
-The JSON is validated against the full zod schemas on load. `createFileAdapters` returns all six adapters backed by in-memory maps — `search` uses a full-JSON-stringify text scan, `get` is a direct map lookup.
+The JSON is validated against the full zod schemas on load. `createFileAdapters` returns all six adapters backed by in-memory maps — `search` delegates to the shared `rankedSearch`, `get` is a direct map lookup, `list` returns the surface array. The optional `regulation_history` corpus key powers `get(id, asOf)` — see [Corpus structure → Versioning](../corpus/#versioning) for the file shape and the resolution rule. The MCPB entry point additionally runs the structural linter at startup: violations abort with exit 1, staleness warnings print to stderr without blocking.
 
 ## The in-memory demo as a template
 
@@ -86,11 +105,11 @@ The JSON is validated against the full zod schemas on load. `createFileAdapters`
 
 Key things the demo shows:
 
-- **`search(query)`** — simple `Array.filter` + `.toLowerCase().includes()` against record fields
-- **`get(id, asOf?)`** — direct map lookup; `asOf` triggers version-history selection for regulation
-- **`list(filter?)`** — the sources surface lists (optionally by status) instead of searching
-- **`resolveCitation(text)`** — pattern-match on prose strings to structured IDs
-- **`referrers(id)`** — scan `Check.derived_from` and `Phase.references` to build back-references
+- **`search(query)`** — delegates to `rankedSearch` with the surface's exported field set
+- **`get(id, asOf?)`** — direct map lookup; `asOf` selects from per-id version history (the last entry whose `effectiveFrom` ≤ `asOf`; predating all entries → `null`; no history → current)
+- **`list()`** — returns every record on the surface; the sources variant filters by status
+- **`resolveCitation(text)`** — delegates to `resolveCitationIn` from the file adapter, the deterministic citation matcher
+- **`referrers(id)`** — delegates to `computeReferrers` from `src/referrers.ts`, the ONE reverse index over parent/children, `derived_from`, `regulatory_basis`, `regulatory_scope`, and playbook phase references
 
 For a production adapter, replace the in-memory maps with HTTP calls, a database, or whatever backs the corpus. The interface contract is the same.
 

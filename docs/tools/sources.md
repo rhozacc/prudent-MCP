@@ -16,12 +16,12 @@ The full registry — the "is my regulatory context current?" answer.
 |---|---|---|
 | `status` | `"current" \| "pending" \| "superseded"` | Optional — omit for the whole registry |
 
-**Returns:** one summary per source — `id`, `title`, `doc_type`, `status`, `verified`, `effective_from`, `superseded_by`, and `next_milestone` (the first entry of the chronologically ordered milestones array).
+**Returns:** `{ sources: [...] }` — one summary per source: `id`, `title`, `doc_type`, `status`, `verified`, `effective_from`, `superseded_by`, and `next_milestone` (the first entry of the chronologically ordered milestones array).
 
 **Example:**
 ```ts
 list_sources({ status: "pending" })
-→ [{ id: "source://eba/cp-2025-14", title: "EBA-CP-2025-14 Consultation on amending the PD/LGD estimation guidelines (CRR3 alignment)", status: "pending", verified: "2026-08-23", next_milestone: { date: "2026-10-19", event: "Consultation closes" }, ... }]
+→ { sources: [{ id: "source://eba/cp-2025-14", title: "EBA-CP-2025-14 Consultation on amending the PD/LGD estimation guidelines (CRR3 alignment)", status: "pending", verified: "2026-08-23", next_milestone: { date: "2026-10-19", event: "Consultation closes" }, ... }] }
 ```
 
 Call `get_source` for the full record, or `search_regulation` for the corpus content under a document.
@@ -38,7 +38,7 @@ Fetch a source document record by ID.
 |---|---|---|
 | `id` | `SourceId` | e.g. `source://eba/gl-2017-16` |
 
-**Returns:** `Source | null`
+**Returns:** `Source` — unknown ids are an `isError` result pointing at `list_sources`.
 
 ```ts
 type Source = {

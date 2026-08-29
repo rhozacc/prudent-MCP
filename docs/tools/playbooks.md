@@ -8,23 +8,25 @@ Playbooks are guided walkthroughs structured as ordered phases. Each phase has a
 
 ## `search_playbooks`
 
-Full-text search across the catalog of validation playbooks.
+Ranked, field-scoped search across the catalog of validation playbooks: area and subarea (weight 3), phase names (2), phase descriptions (1).
 
 **Inputs:**
 
 | Parameter | Type | Notes |
 |---|---|---|
-| `query` | `string` | Matches against area, subarea, and phase descriptions |
+| `query` | `string` | Minimum 2 characters |
+| `limit` / `offset` | `number` | Optional paging (default 20 per page) |
+| `detail` | `"concise" \| "full"` | Optional, default `"concise"` |
 
-**Returns:** `Playbook[]` — summary only (`id`, `area`, `subarea`). Use `get_playbook` for the full record.
+**Returns:** the shared envelope `{ results, total_matches, offset, truncated }`. Concise results are `{ id, area, subarea, phase_count }`; `detail: "full"` serves complete records. Use `expand_playbook` for phases with references resolved inline.
 
 **Example:**
 ```ts
 search_playbooks("calibration")
-→ [
-    { id: "playbook://calibration/pd",  area: "calibration", subarea: "pd" },
-    { id: "playbook://calibration/lgd", area: "calibration", subarea: "lgd" }
-  ]
+→ { results: [
+    { id: "playbook://calibration/pd",  area: "calibration", subarea: "pd",  phase_count: 3 },
+    { id: "playbook://calibration/lgd", area: "calibration", subarea: "lgd", phase_count: 4 }
+  ], total_matches: 2, offset: 0, truncated: false }
 ```
 
 ---
@@ -39,7 +41,7 @@ Fetch a playbook by ID.
 |---|---|---|
 | `id` | `PlaybookId` | e.g. `playbook://calibration/pd` |
 
-**Returns:** `Playbook | null`
+**Returns:** `Playbook` — unknown ids are an `isError` result pointing at `search_playbooks`.
 
 ```ts
 type Playbook = {
