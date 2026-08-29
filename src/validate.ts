@@ -15,7 +15,9 @@
  *
  * Invariants checked:
  *   1. Mirror invariant — a check/test in Regulation.children points back via
- *      parent AND names that regulation in derived_from / regulatory_basis.
+ *      parent AND names that regulation in derived_from / regulatory_basis;
+ *      conversely (rule 3) a check/test that claims a parent must be listed in
+ *      that parent's children and name it in derived_from / regulatory_basis.
  *   2. Parent/children are bidirectional for regulation nesting.
  *   3. No dangling references — every URI (children, parent, derived_from,
  *      regulatory_basis, regulatory_scope, phase references) resolves.
@@ -119,14 +121,31 @@ export function validateCorpus(corpus: CorpusInput, now: Date = new Date()): str
     }
   }
 
-  // 3 — dangling references on the curated surfaces.
+  // 3 — dangling references on the curated surfaces, plus the child-side half of
+  // the mirror invariant: a check/test that claims a parent must be listed in
+  // that parent's children and must name it in derived_from / regulatory_basis
+  // (rule 1 only enforces this from the Regulation.children side).
   for (const c of checks) {
     for (const r of c.derived_from) if (!regIds.has(r)) errors.push(`${c.id}: derived_from ${r} does not resolve`);
-    if (c.parent !== undefined && !regIds.has(c.parent)) errors.push(`${c.id}: parent ${c.parent} does not resolve`);
+    if (c.parent !== undefined) {
+      if (!regIds.has(c.parent)) {
+        errors.push(`${c.id}: parent ${c.parent} does not resolve`);
+      } else {
+        if (!regById.get(c.parent)!.children.includes(c.id)) errors.push(`${c.id}: parent ${c.parent} does not list it in children (mirror invariant)`);
+        if (!c.derived_from.includes(c.parent)) errors.push(`${c.id}: parent ${c.parent} not in derived_from (mirror invariant)`);
+      }
+    }
   }
   for (const t of tests) {
     for (const r of t.regulatory_basis) if (!regIds.has(r)) errors.push(`${t.id}: regulatory_basis ${r} does not resolve`);
-    if (t.parent !== undefined && !regIds.has(t.parent)) errors.push(`${t.id}: parent ${t.parent} does not resolve`);
+    if (t.parent !== undefined) {
+      if (!regIds.has(t.parent)) {
+        errors.push(`${t.id}: parent ${t.parent} does not resolve`);
+      } else {
+        if (!regById.get(t.parent)!.children.includes(t.id)) errors.push(`${t.id}: parent ${t.parent} does not list it in children (mirror invariant)`);
+        if (!t.regulatory_basis.includes(t.parent)) errors.push(`${t.id}: parent ${t.parent} not in regulatory_basis (mirror invariant)`);
+      }
+    }
   }
   for (const p of playbooks) {
     for (const r of p.regulatory_scope) if (!regIds.has(r)) errors.push(`${p.id}: regulatory_scope ${r} does not resolve`);
