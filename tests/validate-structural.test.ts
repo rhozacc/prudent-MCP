@@ -166,19 +166,34 @@ describe("validateCorpus — rule 1: mirror invariant for check/test children", 
     );
   });
 
-  it("does not currently flag a check whose parent regulation never lists it as a child", () => {
-    // NOTE: pins current behavior. The mirror invariant is enforced only from
-    // the children side — a check (or test) that sets `parent` to a resolving
-    // regulation which does NOT list it in `children`, and omits it from
-    // derived_from, passes validation even though the schema comment says the
-    // parent "must appear in derived_from". Validator gap, documented here so
-    // a future fix flips this expectation deliberately.
+  it("rejects a check whose parent regulation never lists it as a child (child-side mirror)", () => {
+    // Rule 3 enforces the child-side half of the mirror invariant: a claimed
+    // parent must list the check in children AND appear in derived_from.
     const errors = validateCorpus({
       ...empty,
       regulation: [reg({ id: "regulation://crr/180" })],
       checks: [check({ id: "check://calibration/pd/orphan", parent: "regulation://crr/180" })],
     });
-    expect(errors).toEqual([]);
+    expect(errors).toContain(
+      "check://calibration/pd/orphan: parent regulation://crr/180 does not list it in children (mirror invariant)",
+    );
+    expect(errors).toContain(
+      "check://calibration/pd/orphan: parent regulation://crr/180 not in derived_from (mirror invariant)",
+    );
+  });
+
+  it("rejects a test whose parent regulation never lists it as a child (child-side mirror)", () => {
+    const errors = validateCorpus({
+      ...empty,
+      regulation: [reg({ id: "regulation://eba/gl/78" })],
+      tests: [testRecord({ id: "test://orphan", parent: "regulation://eba/gl/78" })],
+    });
+    expect(errors).toContain(
+      "test://orphan: parent regulation://eba/gl/78 does not list it in children (mirror invariant)",
+    );
+    expect(errors).toContain(
+      "test://orphan: parent regulation://eba/gl/78 not in regulatory_basis (mirror invariant)",
+    );
   });
 });
 
