@@ -1,0 +1,22 @@
+{
+  "$ref": "#/definitions/Milestone",
+  "definitions": {
+    "Milestone": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "event"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

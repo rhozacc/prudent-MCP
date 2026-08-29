@@ -8,11 +8,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import packageJson from "../package.json";
 import { registerMetaTools } from "./tools/meta.ts";
 import { registerRegulationTools } from "./tools/regulation.ts";
 import { registerTestTools } from "./tools/tests.ts";
 import { registerCheckTools } from "./tools/checks.ts";
 import { registerPlaybookTools } from "./tools/playbooks.ts";
+import { registerSourceTools } from "./tools/sources.ts";
 import { registerResources } from "./resources.ts";
 import { registerPrompts } from "./prompts/validateReviewArea.ts";
 
@@ -20,12 +22,14 @@ export function createServer(): McpServer {
   const server = new McpServer(
     {
       name: "prudent-mcp",
-      version: "0.4.0",
+      // Single-sourced from package.json — the two drifted before.
+      version: packageJson.version,
     },
     {
       instructions:
         "IRB credit risk model validation knowledge layer. " +
-        "Four surfaces: regulation, tests, checks, playbooks — each with its own URI scheme. " +
+        "Five surfaces: regulation, tests, checks, playbooks, sources — each with its own URI scheme. " +
+        "Sources are the registry of documents the corpus derives from, with currency status. " +
         "Read-only. Latest content by default; pass as_of on regulation tools for historical lookups.",
     },
   );
@@ -35,6 +39,7 @@ export function createServer(): McpServer {
   registerTestTools(server);
   registerCheckTools(server);
   registerPlaybookTools(server);
+  registerSourceTools(server);
   registerResources(server);
   registerPrompts(server);
 

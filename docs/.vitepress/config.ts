@@ -34,6 +34,7 @@ export default withMermaid(defineConfig({
           { text: "Tests",      link: "/tools/tests" },
           { text: "Checks",     link: "/tools/checks" },
           { text: "Playbooks",  link: "/tools/playbooks" },
+          { text: "Sources",    link: "/tools/sources" },
         ],
       },
       {

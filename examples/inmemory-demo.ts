@@ -18,6 +18,7 @@ import type {
   MetaAdapter,
   PlaybookAdapter,
   RegulationAdapter,
+  SourceAdapter,
   TestAdapter,
 } from "../src/adapters.ts";
 import type {
@@ -28,10 +29,13 @@ import type {
   Regulation,
   RegulationId,
   ReviewArea,
+  Source,
+  SourceId,
   Test,
   TestId,
 } from "../src/schema.ts";
 import { createServer } from "../src/server.ts";
+import { staleSourceIds } from "../src/validate.ts";
 
 // ============================================================================
 // Seed data — one cohesive slice (PD calibration + default definition aside)
@@ -359,6 +363,85 @@ const REVIEW_AREAS: ReviewArea[] = [
   { id: "discriminatory-power", name: "Discriminatory Power", children: [] },
 ];
 
+// Source registry seeds. Unlike the frozen dates elsewhere in this file,
+// `verified` is computed relative to today so the demo permanently shows
+// exactly one stale source (the eba/gl-2017-16 seed) instead of every seed
+// rotting past the 30-day line as time passes.
+const daysAgo = (n: number): string =>
+  new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+const SOURCES: Record<SourceId, Source> = {
+  "source://crr/575-2013": {
+    id: "source://crr/575-2013",
+    title: "Regulation (EU) No 575/2013 (CRR)",
+    framework: "crr",
+    document_id: "crr",
+    doc_type: "regulation",
+    status: "current",
+    published: "2013-06-26",
+    effective_from: "2014-01-01",
+    verified: daysAgo(3),
+    milestones: [],
+    url: "https://eur-lex.europa.eu/eli/reg/2013/575/oj",
+  },
+  "source://eba/gl-2017-16": {
+    id: "source://eba/gl-2017-16",
+    title: "EBA-GL-2017-16 Guidelines on PD estimation, LGD estimation and the treatment of defaulted exposures",
+    framework: "eba",
+    document_id: "eba-gl-2017-16",
+    doc_type: "guideline",
+    status: "current",
+    published: "2017-11-20",
+    effective_from: "2021-01-01",
+    // Deliberately stale — exercises stale_sources and the validate warning.
+    verified: daysAgo(45),
+    milestones: [],
+    url: "https://www.eba.europa.eu/regulation-and-policy/model-validation",
+  },
+  "source://eba/cp-2016-21": {
+    id: "source://eba/cp-2016-21",
+    title: "EBA-CP-2016-21 Consultation on PD/LGD estimation guidelines",
+    framework: "eba",
+    document_id: "eba-cp-2016-21",
+    doc_type: "consultation",
+    status: "superseded",
+    published: "2016-11-14",
+    // Old verified date on a superseded record — must NOT count as stale.
+    verified: daysAgo(45),
+    superseded_by: "source://eba/gl-2017-16",
+    milestones: [],
+    notes: "Consultation that produced EBA-GL-2017-16; kept for provenance.",
+  },
+  "source://eba/cp-2025-14": {
+    id: "source://eba/cp-2025-14",
+    title: "EBA-CP-2025-14 Consultation on amending the PD/LGD estimation guidelines (CRR3 alignment)",
+    framework: "eba",
+    document_id: "eba-cp-2025-14",
+    doc_type: "consultation",
+    status: "pending",
+    published: "2025-06-30",
+    verified: daysAgo(3),
+    milestones: [
+      { date: "2026-10-19", event: "Consultation closes" },
+      { date: "Q2 2027", event: "Final guidelines expected" },
+    ],
+    url: "https://www.eba.europa.eu/publications-and-media",
+  },
+  "source://ecb/guide-internal-models": {
+    id: "source://ecb/guide-internal-models",
+    title: "ECB Guide to internal models",
+    framework: "ecb",
+    document_id: "ecb-guide-internal-models",
+    doc_type: "guide",
+    status: "current",
+    published: "2024-02-19",
+    verified: daysAgo(3),
+    milestones: [],
+    url: "https://www.bankingsupervision.europa.eu/",
+    notes: "No regulation records derive from it yet — registry entries may precede corpus content.",
+  },
+};
+
 // ============================================================================
 // Adapter implementations
 // ============================================================================
@@ -414,6 +497,17 @@ const inMemoryPlaybook: PlaybookAdapter = {
   },
 };
 
+const inMemorySource: SourceAdapter = {
+  async list(filter) {
+    const status = filter?.status;
+    const all = Object.values(SOURCES);
+    return status === undefined ? all : all.filter((s) => s.status === status);
+  },
+  async get(id) {
+    return SOURCES[id] ?? null;
+  },
+};
+
 const inMemoryMeta: MetaAdapter = {
   async info() {
     return {
@@ -423,8 +517,10 @@ const inMemoryMeta: MetaAdapter = {
         test: Object.keys(TESTS).length,
         check: Object.keys(CHECKS).length,
         playbook: Object.keys(PLAYBOOKS).length,
+        source: Object.keys(SOURCES).length,
       },
       coverage: ["CRR", "EBA-GL-2017-16"],
+      stale_sources: staleSourceIds(Object.values(SOURCES)),
     };
   },
   async referrers(id) {
@@ -459,6 +555,7 @@ adapters.regulation = inMemoryRegulation;
 adapters.test = inMemoryTest;
 adapters.check = inMemoryCheck;
 adapters.playbook = inMemoryPlaybook;
+adapters.source = inMemorySource;
 adapters.meta = inMemoryMeta;
 
 export const demoServer = createServer();

@@ -19,6 +19,7 @@ if (corpusFile) {
     adapters.test = fa.test;
     adapters.check = fa.check;
     adapters.playbook = fa.playbook;
+    adapters.source = fa.source;
     adapters.meta = fa.meta;
   } catch (err) {
     console.error(`prudent-mcp: failed to load corpus file "${corpusFile}":`, err);

@@ -1,6 +1,6 @@
 # Tools overview
 
-17 tools across six files. Every tool has a description, a zod input schema, and a handler that delegates to the adapter layer.
+19 tools across six files. Every tool has a description, a zod input schema, and a handler that delegates to the adapter layer.
 
 ## All tools
 
@@ -23,6 +23,10 @@
 | `get_check` | checks | Fetch a check by ID |
 | `search_playbooks` | playbooks | Full-text search across the playbook catalog |
 | `get_playbook` | playbooks | Fetch a playbook by ID |
+| `list_sources` | sources | The source-document registry with currency status, optionally filtered |
+| `get_source` | sources | Fetch a source document record by ID |
+
+`list_sources` is deliberately a list, not a search: the registry is small and status-filterable, so enumerating beats matching.
 
 ## URI scheme quick-reference
 
@@ -42,6 +46,10 @@ check://{area}/{topic}[/{specific}]
 playbook://{area}[/{subarea}]
   e.g.  playbook://calibration/pd
         playbook://default-definition
+
+source://{framework}/{document-id}
+  e.g.  source://eba/gl-2017-16
+        source://crr/575-2013
 ```
 
 ## Workflow patterns

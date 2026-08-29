@@ -5,6 +5,7 @@ import type {
   MetaAdapter,
   PlaybookAdapter,
   RegulationAdapter,
+  SourceAdapter,
   TestAdapter,
 } from "./adapters.ts";
 import {
@@ -13,6 +14,7 @@ import {
   PlaybookSchema,
   RegulationSchema,
   ReviewAreaSchema,
+  SourceSchema,
   TestSchema,
 } from "./schema.ts";
 import type {
@@ -25,9 +27,12 @@ import type {
   Regulation,
   RegulationId,
   ReviewArea,
+  Source,
+  SourceId,
   Test,
   TestId,
 } from "./schema.ts";
+import { staleSourceIds } from "./validate.ts";
 
 // --- Corpus file schema -------------------------------------------------------
 
@@ -36,6 +41,7 @@ const CorpusFileSchema = z.object({
   tests: z.array(TestSchema).default([]),
   checks: z.array(CheckSchema).default([]),
   playbooks: z.array(PlaybookSchema).default([]),
+  sources: z.array(SourceSchema).default([]),
   taxonomy: z.array(ReviewAreaSchema).default([]),
   corpus_info: CorpusInfoSchema.optional(),
 });
@@ -59,12 +65,14 @@ export function createFileAdapters(corpus: CorpusFile): {
   test: TestAdapter;
   check: CheckAdapter;
   playbook: PlaybookAdapter;
+  source: SourceAdapter;
   meta: MetaAdapter;
 } {
   const regMap = new Map<RegulationId, Regulation>(corpus.regulation.map(r => [r.id, r]));
   const testMap = new Map<TestId, Test>(corpus.tests.map(t => [t.id, t]));
   const checkMap = new Map<CheckId, Check>(corpus.checks.map(c => [c.id, c]));
   const playbookMap = new Map<PlaybookId, Playbook>(corpus.playbooks.map(p => [p.id, p]));
+  const sourceMap = new Map<SourceId, Source>(corpus.sources.map(s => [s.id, s]));
 
   const regulation: RegulationAdapter = {
     async search(query) { return textSearch(corpus.regulation, query); },
@@ -86,9 +94,26 @@ export function createFileAdapters(corpus: CorpusFile): {
     async get(id) { return playbookMap.get(id) ?? null; },
   };
 
+  const source: SourceAdapter = {
+    async list(filter) {
+      const status = filter?.status;
+      return status === undefined ? corpus.sources : corpus.sources.filter(s => s.status === status);
+    },
+    async get(id) { return sourceMap.get(id) ?? null; },
+  };
+
   const meta: MetaAdapter = {
     async info(): Promise<CorpusInfo> {
-      if (corpus.corpus_info) return corpus.corpus_info;
+      // Source count and staleness are computed at serve time even when the
+      // file ships a corpus_info block — stored currency data is stale by definition.
+      const stale_sources = staleSourceIds(corpus.sources);
+      if (corpus.corpus_info) {
+        return {
+          ...corpus.corpus_info,
+          counts: { ...corpus.corpus_info.counts, source: corpus.sources.length },
+          stale_sources,
+        };
+      }
       return {
         last_updated: new Date().toISOString(),
         counts: {
@@ -96,8 +121,10 @@ export function createFileAdapters(corpus: CorpusFile): {
           test: corpus.tests.length,
           check: corpus.checks.length,
           playbook: corpus.playbooks.length,
+          source: corpus.sources.length,
         },
         coverage: [...new Set(corpus.regulation.map(r => r.framework.toUpperCase()))],
+        stale_sources,
       };
     },
     async referrers(id: string): Promise<Referrers> {
@@ -128,5 +155,5 @@ export function createFileAdapters(corpus: CorpusFile): {
     },
   };
 
-  return { regulation, test, check, playbook, meta };
+  return { regulation, test, check, playbook, source, meta };
 }

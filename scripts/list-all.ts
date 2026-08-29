@@ -94,6 +94,21 @@ async function main() {
     }
   }
 
+  // ── Sources ───────────────────────────────────────────────────────────────
+  console.log(H1("SOURCES"));
+  const sources = await adapters.source.list();
+  for (const s of sources) {
+    console.log(H2(`${s.title}  [${s.id}]`));
+    console.log(`  ${s.doc_type}  |  status: ${s.status}  |  verified: ${s.verified}`);
+    console.log(`  document_id: ${s.document_id}`);
+    if (s.superseded_by) console.log(`  superseded_by: ${s.superseded_by}`);
+    if (s.milestones.length) {
+      console.log("\n  milestones:");
+      for (const m of s.milestones) console.log(`    ${m.date}  —  ${m.event}`);
+    }
+    if (s.notes) console.log(`\n  ${s.notes}`);
+  }
+
   console.log(`\n${"═".repeat(64)}\n`);
 }
 

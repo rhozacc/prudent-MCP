@@ -12,6 +12,7 @@ import type {
   CheckId,
   PlaybookId,
   RegulationId,
+  SourceId,
   TestId,
 } from "./schema.ts";
 
@@ -88,6 +89,25 @@ export function registerResources(server: McpServer): void {
       return {
         contents: [
           { uri: uri.href, mimeType: "application/json", text: p ? JSON.stringify(p, null, 2) : "" },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "source",
+    new ResourceTemplate("source://{+path}", { list: undefined }),
+    {
+      title: "Source",
+      description:
+        "source://{framework}/{document-id} — e.g. source://eba/gl-2017-16",
+    },
+    async (uri, { path }) => {
+      const id = `source://${String(path)}` as SourceId;
+      const s = await adapters.source.get(id);
+      return {
+        contents: [
+          { uri: uri.href, mimeType: "application/json", text: s ? JSON.stringify(s, null, 2) : "" },
         ],
       };
     },

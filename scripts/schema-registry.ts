@@ -10,11 +10,13 @@ import {
   CheckSchema,
   CommentarySchema,
   CorpusInfoSchema,
+  MilestoneSchema,
   PhaseSchema,
   PlaybookSchema,
   ReferrersSchema,
   RegulationSchema,
   ReviewAreaSchema,
+  SourceSchema,
   TestSchema,
 } from "../src/schema.ts";
 
@@ -23,11 +25,13 @@ export const surfaceSchemas = {
   Test: TestSchema,
   Check: CheckSchema,
   Playbook: PlaybookSchema,
+  Source: SourceSchema,
 } as const;
 
 export const supportingSchemas = {
   Commentary: CommentarySchema,
   Phase: PhaseSchema,
+  Milestone: MilestoneSchema,
   ReviewArea: ReviewAreaSchema,
   CorpusInfo: CorpusInfoSchema,
   Referrers: ReferrersSchema,

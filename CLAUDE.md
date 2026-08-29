@@ -4,7 +4,7 @@ This file is the working brief when extending the codebase. For human onboarding
 
 ## What this is
 
-An MCP server that exposes a structured knowledge base for IRB credit-risk model validation. Four parallel surfaces — `regulation`, `tests`, `checks`, `playbooks` — each with its own URI scheme, plus cross-cutting tools, a review-area taxonomy, and prompt scaffolds.
+An MCP server that exposes a structured knowledge base for IRB credit-risk model validation. Five parallel surfaces — `regulation`, `tests`, `checks`, `playbooks`, `sources` — each with its own URI scheme, plus cross-cutting tools, a review-area taxonomy, and prompt scaffolds. The `sources` surface is the regulatory-context registry: which documents the corpus derives from and whether that context is current.
 
 The server is the **read-only knowledge layer**. No execution, no writes, no orchestration. That boundary is load-bearing.
 
@@ -27,13 +27,14 @@ scripts/generate-schemas.ts  zod → JSON Schema export (chained to also write t
 scripts/schema-registry.ts   shared named-schema list (generator, schema-docs, drift test)
 scripts/generate-schema-docs.ts  regenerates docs/corpus/schemas.md (rendered schema reference)
 scripts/list-all.ts          prints full corpus overview to stdout
-scripts/validate-corpus.ts   integrity linter (mirror invariant, dangling refs, cycles); CI-able
+scripts/validate-corpus.ts   integrity linter (mirror invariant, dangling refs, cycles, source supersession; warns on stale sources); CI-able
 scripts/generate-graph.ts    regenerates docs/corpus/graph.md (Mermaid corpus map)
 scripts/build-mcpb.ts        bundle src/mcpb-entry.ts + pack .mcpb
 docs/                      architecture, corpus structure, schema reference, corpus graph
 tests/smoke.test.ts        construction + traversal smoke tests
 tests/schema.test.ts       schema validation + generative URI tests
 tests/schema-drift.test.ts golden test: committed JSON Schemas match the zod defs
+tests/validate.test.ts     validator rules (source supersession, staleness warnings)
 ```
 
 Every tool, resource, and prompt has a description, a zod input schema, and a handler. In the open-source distribution the default adapters return empty results. The in-memory demo reassigns adapter handles to seed real content for development and inspection.
@@ -58,6 +59,7 @@ Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime 
 - **`Regulation.children` is mixed but typed** — `RegulationChildId = RegulationId | TestId | CheckId`. A record nests sub-regulations *and* the checks/tests that operationalize it; a `PlaybookId` is rejected at compile time. It stays the denormalized inverse of `parent`, which now also lives on `Check`/`Test`. **Mirror invariant:** a check/test listed as a child must also name that regulation in `derived_from`/`regulatory_basis` (and point back via `parent`), so `get_referrers` remains the single computed reverse index — don't add a second scan over `children`.
 - `Check.derived_from` + `Check.expectation` + `Check.expected_evidence` — traceability from supervisor expectations back to law, plus the concrete artifacts a reviewer must gather. Without `derived_from`, a Check is opinion. Without `expected_evidence`, it's underspecified.
 - **Check URI shape** — `check://{area}/{topic}[/{specific}]` (e.g. `check://calibration/pd/lra-derived`). Hierarchical, consistent with `regulation://`. Don't flatten back to `check://slug`.
+- **`Source` is a currency registry, not referenced content** — `source://{framework}/{document-id}`, latest-only (supersession = `status` + `superseded_by`, linter-enforced: the two imply each other, pointers resolve, chains are acyclic). It stays out of `children`, `get_referrers`, `AnyId`, and the mirror invariant; the join to regulation is `framework` + `document_id` string equality, computed where needed. `verified` drives the 30-day staleness surfaced by `get_corpus_info.stale_sources` and `bun run validate` warnings; `milestones` are chronological display strings (never parsed) and `milestones[0]` is served as `next_milestone`. Maintenance = `/maintain-context` session edits gated by the linter, never write tools.
 - `Test.family` + `Test.aliases` + `Test.acceptance_criteria` — equivalence reasoning across bank-specific test variants.
 - `Regulation.commentary` — interpretive material (Q&A, supervisor letters), source-attributed.
 - `Playbook.phases` — structured walkthrough with mixed-surface references in each phase.
@@ -67,7 +69,7 @@ Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime 
 
 - Read-only. No write tools.
 - No execution. The server describes; computation lives elsewhere.
-- Versioning only on `Regulation`. Other surfaces always serve latest.
+- Versioning only on `Regulation`. Other surfaces always serve latest; source supersession is a `status` + pointer, not history.
 - URI schemes match surface names.
 - Cross-surface references are typed.
 - Strict TS (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Keep both on.
@@ -82,12 +84,12 @@ Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime 
 ## Surface area
 
 ```
-Tools:       17   9 cross-cutting + (search + get) × 4 surfaces
+Tools:       19   9 cross-cutting + (search + get) × 4 surfaces + (list + get) × 1 registry
                   cross-cutting: get_corpus_info · get_referrers · resolve_citation
                                  list_review_areas · expand_playbook · get_area_overview
                                  expand_regulation · get_regulation_tree · get_coverage_gaps
-Templates:    4   one per URI scheme
+Templates:    5   one per URI scheme
 Prompts:      3   validate_review_area · review_calibration · assess_findings
-Schemas:      9   Regulation · Test · Check · Playbook · CorpusInfo · Referrers
-                  · Commentary · Phase · ReviewArea
+Schemas:     11   Regulation · Test · Check · Playbook · Source · CorpusInfo
+                  · Referrers · Commentary · Phase · Milestone · ReviewArea
 ```

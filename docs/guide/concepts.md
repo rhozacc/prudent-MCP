@@ -4,7 +4,7 @@ The corpus models a specific working domain — internal ratings-based (IRB) cre
 
 If you already know the domain and want the schema, skip to [Corpus structure](/corpus/).
 
-## The four surfaces, conceptually
+## The surfaces, conceptually
 
 <div class="diagram" v-pre>
 <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;color:var(--vp-c-text-1);">
@@ -38,12 +38,13 @@ If you already know the domain and want the schema, skip to [Corpus structure](/
 </svg>
 </div>
 
-The four surfaces correspond to the four kinds of artifact you actually deal with on a validation:
+The four content surfaces in the diagram correspond to the four kinds of artifact you actually deal with on a validation; a fifth surface sits beside them and tracks where they come from:
 
 - **Regulation** is what the supervisor and the law require. It's the ground truth and the only versioned surface.
 - **Tests** are the statistical procedures — Hosmer-Lemeshow, Jeffreys, AUROC, Brier score — that turn portfolio data into evidence.
 - **Checks** are the qualitative bar: a concrete pass/fail expectation, traced back to the regulation it operationalises.
 - **Playbooks** are the walkthroughs that combine all of the above into an ordered review.
+- **Sources** are the provenance layer: the registry of publisher documents the corpus derives from, with currency status, verification dates, and upcoming milestones. Nothing references a source by URI — the join to regulation is the document identity — which is why they sit beside the diagram rather than in it.
 
 ## IRB in one paragraph
 
