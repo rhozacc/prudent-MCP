@@ -32,25 +32,55 @@ import type {
 export type { Referrers } from "./schema.ts";
 
 // --- Interfaces --------------------------------------------------------------
+//
+// list() vs search() — two different contracts on every content surface:
+//
+//   - list() returns ALL records. It is the internal traversal + enumeration
+//     contract: cross-cutting tools (coverage gaps, area overviews), corpus
+//     scripts, and validators use it when they genuinely need everything.
+//   - search(query) is ranked relevance search (see src/search.ts) for a real
+//     query. It never dumps the corpus: an empty or whitespace-only query
+//     returns []. Do not lean on search("") to enumerate — that undocumented
+//     contract is gone; call list() instead.
 
 export interface RegulationAdapter {
+  /** Ranked search over citation/text/commentary. Empty query ⇒ []. */
   search(query: string): Promise<Regulation[]>;
+  /**
+   * Fetch one record, optionally as of an ISO date. `asOf` resolves against
+   * the backend's version history; when the backend has no history for the id
+   * it serves the only version it knows (the current one). When history
+   * exists, the version in force on `asOf` is returned — or null when `asOf`
+   * predates every known version. Backends must not silently serve current
+   * text as historical.
+   */
   get(id: RegulationId, asOf?: string): Promise<Regulation | null>;
+  /** ALL regulation records — enumeration/traversal contract, not search. */
+  list(): Promise<Regulation[]>;
 }
 
 export interface TestAdapter {
+  /** Ranked search over name/aliases/family/purpose/criteria. Empty query ⇒ []. */
   search(query: string): Promise<Test[]>;
   get(id: TestId): Promise<Test | null>;
+  /** ALL test records — enumeration/traversal contract, not search. */
+  list(): Promise<Test[]>;
 }
 
 export interface CheckAdapter {
+  /** Ranked search over name/expectation/expected_evidence. Empty query ⇒ []. */
   search(query: string): Promise<Check[]>;
   get(id: CheckId): Promise<Check | null>;
+  /** ALL check records — enumeration/traversal contract, not search. */
+  list(): Promise<Check[]>;
 }
 
 export interface PlaybookAdapter {
+  /** Ranked search over area/subarea/phase names+descriptions. Empty query ⇒ []. */
   search(query: string): Promise<Playbook[]>;
   get(id: PlaybookId): Promise<Playbook | null>;
+  /** ALL playbook records — enumeration/traversal contract, not search. */
+  list(): Promise<Playbook[]>;
 }
 
 // The registry is small and list-shaped, so unlike the content surfaces this
@@ -72,21 +102,25 @@ export interface MetaAdapter {
 const emptyRegulation: RegulationAdapter = {
   async search() { return []; },
   async get() { return null; },
+  async list() { return []; },
 };
 
 const emptyTest: TestAdapter = {
   async search() { return []; },
   async get() { return null; },
+  async list() { return []; },
 };
 
 const emptyCheck: CheckAdapter = {
   async search() { return []; },
   async get() { return null; },
+  async list() { return []; },
 };
 
 const emptyPlaybook: PlaybookAdapter = {
   async search() { return []; },
   async get() { return null; },
+  async list() { return []; },
 };
 
 const emptySource: SourceAdapter = {

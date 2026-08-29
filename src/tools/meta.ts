@@ -17,7 +17,16 @@ import type {
   Test,
   TestId,
 } from "../schema.ts";
-import { playbookIdSchema, regulationIdSchema } from "../schema.ts";
+import {
+  CorpusInfoSchema,
+  ReferrersSchema,
+  RegulationSchema,
+  ReviewAreaSchema,
+  anyIdSchema,
+  playbookIdSchema,
+  regulationIdSchema,
+} from "../schema.ts";
+import { READ_ONLY_HINTS, lenient, miss, ok, stripEdgeNoise } from "./shared.ts";
 
 // ── Local return types ────────────────────────────────────────────────────────
 
@@ -27,7 +36,13 @@ type ResolvedReference =
   | { type: "check";      id: CheckId;      record: Check | null }
   | { type: "playbook";   id: PlaybookId;   record: Playbook | null };
 
+// Concise stub for a resolved reference: label is the citation for regulation,
+// the name for tests/checks, area[/subarea] for playbooks — null when the
+// reference does not resolve.
+type ReferenceStub = { type: ResolvedReference["type"]; id: string; label: string | null };
+
 type ExpandedPhase = { name: string; description: string; references: ResolvedReference[] };
+type ConcisePhase  = { name: string; description: string; references: ReferenceStub[] };
 
 type ExpandedPlaybook = {
   id: PlaybookId;
@@ -38,9 +53,11 @@ type ExpandedPlaybook = {
   last_updated: string;
 };
 
+type ConciseExpandedPlaybook = Omit<ExpandedPlaybook, "phases"> & { phases: ConcisePhase[] };
+
 type AreaOverview = {
   area: ReviewArea;
-  playbooks: ExpandedPlaybook[];
+  playbooks: ExpandedPlaybook[] | ConciseExpandedPlaybook[];
   regulation_ids: RegulationId[];
   check_ids: CheckId[];
   test_ids: TestId[];
@@ -56,6 +73,8 @@ type ExpandedRegulation = {
   children: ResolvedReference[];
 };
 
+type ConciseExpandedRegulation = Omit<ExpandedRegulation, "children"> & { children: ReferenceStub[] };
+
 type RegulationTreeLeaf =
   | { type: "test";  id: TestId;  record: Test | null }
   | { type: "check"; id: CheckId; record: Check | null };
@@ -69,12 +88,25 @@ type RegulationTreeNode = {
   truncated?: boolean;
 };
 
+type ConciseTreeLeaf = { type: "test" | "check"; id: string; label: string | null };
+type ConciseTreeNode = {
+  type: "regulation";
+  id: RegulationId;
+  citation: string;
+  children: Array<ConciseTreeNode | ConciseTreeLeaf>;
+  truncated?: boolean;
+};
+
 type CoverageGap = { id: RegulationId; citation: string; is_leaf: boolean };
 type CoverageReport = {
   total_regulations: number;
   covered: number;
   uncovered: CoverageGap[];
 };
+
+// Hard ceiling on nodes materialized by get_regulation_tree (root + regulation
+// nodes + check/test leaves). Nodes cut off by the cap are flagged truncated.
+const MAX_TREE_NODES = 200;
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -88,6 +120,18 @@ async function resolveReference(id: AnyId): Promise<ResolvedReference> {
   if (id.startsWith("check://"))
     return { type: "check", id: id as CheckId, record: await adapters.check.get(id as CheckId) };
   return { type: "playbook", id: id as PlaybookId, record: await adapters.playbook.get(id as PlaybookId) };
+}
+
+function stubOf(ref: ResolvedReference): ReferenceStub {
+  const label =
+    ref.record === null
+      ? null
+      : ref.type === "regulation"
+        ? ref.record.citation
+        : ref.type === "playbook"
+          ? (ref.record.subarea !== undefined ? `${ref.record.area}/${ref.record.subarea}` : ref.record.area)
+          : ref.record.name;
+  return { type: ref.type, id: ref.id, label };
 }
 
 async function expandPlaybook(raw: Playbook): Promise<ExpandedPlaybook> {
@@ -109,6 +153,17 @@ async function expandPlaybook(raw: Playbook): Promise<ExpandedPlaybook> {
   };
 }
 
+function toConcisePlaybook(pb: ExpandedPlaybook): ConciseExpandedPlaybook {
+  return {
+    ...pb,
+    phases: pb.phases.map((ph) => ({
+      name: ph.name,
+      description: ph.description,
+      references: ph.references.map(stubOf),
+    })),
+  };
+}
+
 // Fetch a regulation's children resolved one level deep. The reverse-direction
 // companion to expandPlaybook — children may now be checks/tests, not just regs.
 export async function expandRegulation(raw: Regulation): Promise<ExpandedRegulation> {
@@ -124,14 +179,21 @@ export async function expandRegulation(raw: Regulation): Promise<ExpandedRegulat
   };
 }
 
-// Recursive dossier walk. Regulation children recurse (bounded by depth and a
-// visited-set cycle guard); checks/tests are resolved leaves.
+function toConciseRegulation(expanded: ExpandedRegulation): ConciseExpandedRegulation {
+  return { ...expanded, children: expanded.children.map(stubOf) };
+}
+
+// Recursive dossier walk. Regulation children recurse (bounded by depth, a
+// visited-set cycle guard, and a shared node budget); checks/tests are
+// resolved leaves. Nodes cut off by any bound are flagged truncated.
 export async function buildRegulationTree(
   id: RegulationId,
   depth: number,
   visited: Set<RegulationId>,
   asOf?: string,
+  budget: { remaining: number } = { remaining: MAX_TREE_NODES },
 ): Promise<RegulationTreeNode> {
+  budget.remaining -= 1; // this node
   const record = await adapters.regulation.get(id, asOf);
   const node: RegulationTreeNode = {
     type: "regulation",
@@ -147,15 +209,35 @@ export async function buildRegulationTree(
   }
   visited.add(id);
   for (const childId of record.children) {
+    if (budget.remaining <= 0) {
+      node.truncated = true;
+      break;
+    }
     if (childId.startsWith("regulation://")) {
-      node.children.push(await buildRegulationTree(childId as RegulationId, depth - 1, visited, asOf));
+      node.children.push(await buildRegulationTree(childId as RegulationId, depth - 1, visited, asOf, budget));
     } else if (childId.startsWith("test://")) {
+      budget.remaining -= 1;
       node.children.push({ type: "test", id: childId as TestId, record: await adapters.test.get(childId as TestId) });
     } else {
+      budget.remaining -= 1;
       node.children.push({ type: "check", id: childId as CheckId, record: await adapters.check.get(childId as CheckId) });
     }
   }
   return node;
+}
+
+function toConciseTree(node: RegulationTreeNode): ConciseTreeNode {
+  return {
+    type: "regulation",
+    id: node.id,
+    citation: node.citation,
+    children: node.children.map((c) =>
+      c.type === "regulation"
+        ? toConciseTree(c)
+        : { type: c.type, id: c.id, label: c.record?.name ?? null },
+    ),
+    ...(node.truncated === true ? { truncated: true } : {}),
+  };
 }
 
 // Which regulations have no check/test pointing at them via derived_from /
@@ -183,99 +265,166 @@ export function computeCoverageGaps(
   };
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
-
-function asJson(value: unknown): { content: [{ type: "text"; text: string }] } {
-  return {
-    content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
-  };
-}
+// Shared input value for the traversal tools' verbosity switch.
+const detailSchema = z
+  .enum(["concise", "full"])
+  .default("concise")
+  .describe(
+    "concise (default): resolved references become { type, id, label } stubs " +
+      "(label = citation for regulation, name otherwise; null when unresolved); " +
+      "full: complete records embedded.",
+  );
 
 export function registerMetaTools(server: McpServer): void {
   server.registerTool(
     "get_corpus_info",
     {
+      title: "Corpus info",
       description:
-        "What's loaded right now. Tells Claude what's actually queryable. " +
+        "What's loaded right now — the entry point before anything else. " +
         "Returns { last_updated, counts: {regulation, test, check, playbook, source}, " +
         "coverage: [...], stale_sources: [...] } — stale_sources lists current sources " +
-        "whose verified date is older than 30 days; follow up with list_sources.",
+        "whose verified date is older than 30 days; follow up with list_sources, then " +
+        "list_review_areas to map a task onto the corpus.",
       inputSchema: {},
+      outputSchema: CorpusInfoSchema,
+      annotations: READ_ONLY_HINTS,
     },
-    async () => asJson(await adapters.meta.info()),
+    async () => ok(await adapters.meta.info()),
   );
 
   server.registerTool(
     "get_referrers",
     {
+      title: "Find referrers",
       description:
-        "Find everything that references this ID. Works on any surface. " +
-        "Returns { regulation: [...], tests: [...], checks: [...], playbooks: [...] }.",
+        "The computed reverse index: everything that references this ID through a typed " +
+        "cross-surface reference (parent/children, derived_from, regulatory_basis, " +
+        "regulatory_scope, playbook phase references). Returns { regulation: [...], " +
+        "tests: [...], checks: [...], playbooks: [...] }. Accepts regulation://, test://, " +
+        "check://, playbook:// ids — source:// ids error (sources sit outside the reference " +
+        "graph; they join via document_id). Resolve returned ids with the matching get_* tool.",
       inputSchema: {
-        id: z.string().describe("Any surface ID — regulation://, test://, check://, or playbook://."),
+        id: z.string().describe("Any content-surface ID — regulation://, test://, check://, or playbook://."),
       },
+      outputSchema: ReferrersSchema,
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ id }) => asJson(await adapters.meta.referrers(id)),
+    async ({ id }) => {
+      const cleaned = stripEdgeNoise(id);
+      if (!anyIdSchema.safeParse(cleaned).success) {
+        if (cleaned.startsWith("source://")) {
+          return miss(
+            `${cleaned} is a source-registry id. Sources sit outside the reference graph — ` +
+              "they join regulation records via framework + document_id, never by URI — so " +
+              "nothing refers to them by id. Use get_source or list_sources instead.",
+          );
+        }
+        return miss(
+          `'${id}' is not a corpus URI. Pass a regulation://, test://, check://, or ` +
+            "playbook:// id — find one with the search_* tools or list_review_areas.",
+        );
+      }
+      return ok(await adapters.meta.referrers(cleaned));
+    },
   );
 
   server.registerTool(
     "resolve_citation",
     {
+      title: "Resolve citation",
       description:
-        "Loose citation string → structured Regulation.\n" +
-        '"Art. 178(1)(a)"            → regulation://crr/178/1/a\n' +
-        '"CRR Article 178"           → regulation://crr/178\n' +
-        '"EBA GL on PD-LGD, para 83" → regulation://eba/gl-2017-16/83',
+        "Loose citation string → structured Regulation record.\n" +
+        '  "Art. 178(1)(a)"           → regulation://crr/178/1/a\n' +
+        '  "CRR Article 180"          → regulation://crr/180\n' +
+        '  "EBA GL 2017/16 para 78"   → regulation://eba/gl-2017-16/78\n' +
+        "Matching prefers exact normalized citations, then containment (a citation naming a " +
+        "missing node resolves to the closest recorded relative), then article/paragraph/point " +
+        "segments against id paths. Returns { match: Regulation | null } — on null, fall back " +
+        "to search_regulation with the citation's key words.",
       inputSchema: {
         text: z.string().describe("A loose, human-prose citation."),
       },
+      outputSchema: { match: RegulationSchema.nullable() },
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ text }) => asJson(await adapters.meta.resolveCitation(text)),
+    async ({ text }) => {
+      const match = await adapters.meta.resolveCitation(text);
+      const result = ok({ match });
+      if (match === null) {
+        result.content.push({
+          type: "text",
+          text: "No regulation matched this citation. Try search_regulation with the citation's key words.",
+        });
+      }
+      return result;
+    },
   );
 
   server.registerTool(
     "list_review_areas",
     {
+      title: "List review areas",
       description:
         "The canonical taxonomy of review areas. Use this to map a real-world task " +
-        "('I'm reviewing LGD calibration') onto the corpus's structure. Without this, " +
-        "every review invents its own mapping from doc sections to corpus content.",
+        "('I'm reviewing LGD calibration') onto the corpus's structure. Returns " +
+        "{ areas: [{ id, name, parent, children }] } — feed an area id to " +
+        "get_area_overview for the one-shot bundle of playbooks, checks, and regulation.",
       inputSchema: {},
+      outputSchema: { areas: z.array(ReviewAreaSchema) },
+      annotations: READ_ONLY_HINTS,
     },
-    async () => asJson(await adapters.meta.taxonomy()),
+    async () => ok({ areas: await adapters.meta.taxonomy() }),
   );
 
   server.registerTool(
     "expand_playbook",
     {
+      title: "Expand playbook",
       description:
         "Fetch a playbook with all Phase.references resolved inline — avoids N+1 fetches. " +
-        "Returns ExpandedPlaybook | null. Each reference becomes { type, id, record } where " +
-        "record is the full Regulation | Test | Check | Playbook object (null if not found).",
-      inputSchema: { id: playbookIdSchema },
+        "concise (default): each reference becomes a { type, id, label } stub; detail: 'full' " +
+        "embeds the complete Regulation | Test | Check | Playbook record per reference " +
+        "(record null if unresolved). Unknown ids return isError with a pointer — verify " +
+        "with search_playbooks or list_review_areas.",
+      inputSchema: {
+        id: lenient(playbookIdSchema).describe("e.g. playbook://calibration/pd"),
+        detail: detailSchema,
+      },
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ id }) => {
+    async ({ id, detail }) => {
       const raw = await adapters.playbook.get(id);
-      return asJson(raw === null ? null : await expandPlaybook(raw));
+      if (raw === null) return miss(`No playbook ${id}. Verify the id with search_playbooks or list_review_areas.`);
+      const expanded = await expandPlaybook(raw);
+      return ok(detail === "full" ? expanded : toConcisePlaybook(expanded));
     },
   );
 
   server.registerTool(
     "get_area_overview",
     {
+      title: "Area overview",
       description:
-        "One-shot entry point for a review area. Returns the ReviewArea node, all its playbooks " +
-        "fully expanded, and deduplicated flat lists of regulation_ids, check_ids, test_ids " +
-        "encountered across all phases. Returns null if the area slug is unknown. " +
-        "Use list_review_areas first to confirm the canonical slug.",
-      inputSchema: { area: z.string().describe("Canonical area slug, e.g. 'calibration.pd'") },
+        "One-shot entry point for a review area. Returns { area, playbooks, regulation_ids, " +
+        "check_ids, test_ids } — the ReviewArea node, its playbooks expanded (reference stubs " +
+        "by default; detail: 'full' embeds complete records), and deduplicated flat id lists " +
+        "encountered across all phases. Unknown slugs return isError — call list_review_areas " +
+        "first to confirm the canonical slug.",
+      inputSchema: {
+        area: lenient(z.string()).describe("Canonical area slug, e.g. 'calibration.pd'"),
+        detail: detailSchema,
+      },
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ area }) => {
+    async ({ area, detail }) => {
       const allAreas = await adapters.meta.taxonomy();
       const areaNode = allAreas.find((a) => a.id === area);
-      if (areaNode === undefined) return asJson(null);
+      if (areaNode === undefined) {
+        return miss(`Unknown review area '${area}'. Call list_review_areas for the canonical slugs.`);
+      }
 
-      const allPlaybooks = await adapters.playbook.search("");
+      const allPlaybooks = await adapters.playbook.list();
       const areaPlaybooks = allPlaybooks.filter(
         (p) => p.area === area || (p.subarea !== undefined && `${p.area}.${p.subarea}` === area),
       );
@@ -297,69 +446,109 @@ export function registerMetaTools(server: McpServer): void {
           }
         }
       }
-      return asJson({ area: areaNode, playbooks: expanded, regulation_ids, check_ids, test_ids } satisfies AreaOverview);
+      const playbooks = detail === "full" ? expanded : expanded.map(toConcisePlaybook);
+      return ok({ area: areaNode, playbooks, regulation_ids, check_ids, test_ids } satisfies AreaOverview);
     },
   );
 
   server.registerTool(
     "expand_regulation",
     {
+      title: "Expand regulation",
       description:
         "Fetch a regulation with its children resolved inline — sub-regulations plus the " +
-        "checks/tests that operationalize it. The reverse-direction companion to expand_playbook; " +
-        "avoids N+1 fetches. Returns the regulation fields plus children: [{ type, id, record }] " +
-        "where record is the full Regulation | Test | Check (null if not found), or null if the id " +
-        "is unknown. Use get_regulation_tree to walk the whole sub-tree.",
+        "checks/tests that operationalize it; the reverse-direction companion to " +
+        "expand_playbook. Returns the regulation fields plus children as { type, id, label } " +
+        "stubs (default) or complete records (detail: 'full'). Supports as_of like " +
+        "get_regulation. Unknown ids return isError with a pointer. Use get_regulation_tree " +
+        "to walk the whole sub-tree.",
       inputSchema: {
-        id: regulationIdSchema.describe("e.g. regulation://crr/180/1/a"),
+        id: lenient(regulationIdSchema).describe("e.g. regulation://crr/180/1/a"),
         as_of: z.string().date().optional().describe("ISO date — resolve the regulation as of this date"),
+        detail: detailSchema,
       },
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ id, as_of }) => {
+    async ({ id, as_of, detail }) => {
       const raw = await adapters.regulation.get(id, as_of);
-      return asJson(raw === null ? null : await expandRegulation(raw));
+      if (raw === null) {
+        if (as_of !== undefined && (await adapters.regulation.get(id)) !== null) {
+          return miss(
+            `No version of ${id} was in force on ${as_of} according to this corpus's history — ` +
+              "an as_of predating every recorded version returns nothing. Retry without as_of " +
+              "for the current text.",
+          );
+        }
+        return miss(`No record for ${id}. Verify the id with search_regulation or list_review_areas.`);
+      }
+      const expanded = await expandRegulation(raw);
+      return ok(detail === "full" ? expanded : toConciseRegulation(expanded));
     },
   );
 
   server.registerTool(
     "get_regulation_tree",
     {
+      title: "Regulation tree",
       description:
         "Walk a regulation's children recursively into a dossier: the branch of law " +
-        "(section → paragraphs) with the checks/tests that operationalize each node attached as " +
-        "leaves. Returns a tree of { type, id, citation, record, children }; regulation children " +
-        "recurse, checks/tests are resolved leaves. depth defaults to 5; nodes cut off by depth or " +
-        "a reference cycle are flagged truncated: true. Returns null if the id is unknown.",
+        "(section → paragraphs) with the checks/tests that operationalize each node attached " +
+        "as leaves. Returns a tree of { type, id, citation, children } nodes — concise " +
+        "(default) keeps citations and leaf labels only; detail: 'full' embeds each node's " +
+        "complete record. depth defaults to 5 and the walk is capped at 200 total nodes; " +
+        "nodes cut off by depth, a cycle, or the cap carry truncated: true. Unknown roots " +
+        "return isError — verify with search_regulation.",
       inputSchema: {
-        id: regulationIdSchema.describe("Root of the tree, e.g. regulation://crr/180"),
+        id: lenient(regulationIdSchema).describe("Root of the tree, e.g. regulation://crr/180"),
         depth: z.number().int().min(0).max(10).optional().describe("Max regulation recursion depth (default 5)"),
         as_of: z.string().date().optional().describe("ISO date — resolve regulations as of this date"),
+        detail: detailSchema,
       },
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ id, depth, as_of }) => {
+    async ({ id, depth, as_of, detail }) => {
       const node = await buildRegulationTree(id, depth ?? 5, new Set<RegulationId>(), as_of);
-      return asJson(node.record === null ? null : node);
+      if (node.record === null) {
+        if (as_of !== undefined && (await adapters.regulation.get(id)) !== null) {
+          return miss(
+            `No version of ${id} was in force on ${as_of} according to this corpus's history. ` +
+              "Retry without as_of for the current tree.",
+          );
+        }
+        return miss(`No record for ${id}. Verify the id with search_regulation or list_review_areas.`);
+      }
+      return ok(detail === "full" ? node : toConciseTree(node));
     },
   );
 
   server.registerTool(
     "get_coverage_gaps",
     {
+      title: "Coverage gaps",
       description:
         "Audit the corpus for regulatory requirements with no validation coverage: regulations " +
         "that no check (derived_from) or test (regulatory_basis) points at. Returns " +
         "{ total_regulations, covered, uncovered: [{ id, citation, is_leaf }] }. is_leaf flags " +
         "whether the gap is a leaf paragraph (a real gap) versus a section that may inherit " +
-        "coverage from its children. The aggregate inverse of get_referrers.",
+        "coverage from its children. The aggregate inverse of get_referrers — follow up with " +
+        "get_regulation on any uncovered id.",
       inputSchema: {},
+      outputSchema: {
+        total_regulations: z.number().int(),
+        covered: z.number().int(),
+        uncovered: z.array(
+          z.object({ id: regulationIdSchema, citation: z.string(), is_leaf: z.boolean() }),
+        ),
+      },
+      annotations: READ_ONLY_HINTS,
     },
     async () => {
       const [regs, checks, tests] = await Promise.all([
-        adapters.regulation.search(""),
-        adapters.check.search(""),
-        adapters.test.search(""),
+        adapters.regulation.list(),
+        adapters.check.list(),
+        adapters.test.list(),
       ]);
-      return asJson(computeCoverageGaps(regs, checks, tests));
+      return ok(computeCoverageGaps(regs, checks, tests));
     },
   );
 }

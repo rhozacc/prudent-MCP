@@ -5,37 +5,72 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { adapters } from "../adapters.ts";
-import { checkIdSchema } from "../schema.ts";
+import { CheckSchema, checkIdSchema, regulationIdSchema } from "../schema.ts";
+import {
+  READ_ONLY_HINTS,
+  firstSentence,
+  lenient,
+  miss,
+  ok,
+  paginate,
+  searchInputShape,
+  searchOutputShape,
+  searchResult,
+} from "./shared.ts";
 
-function asJson(v: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] };
-}
+// Concise projection served by search_checks (detail: "concise").
+const ConciseCheckHit = z.object({
+  id: checkIdSchema,
+  name: z.string(),
+  expectation_first_sentence: z.string(),
+  derived_from: z.array(regulationIdSchema).describe("Regulations this check operationalises"),
+});
 
 export function registerCheckTools(server: McpServer): void {
   server.registerTool(
     "search_checks",
     {
+      title: "Search checks",
       description:
-        "Full-text search across the catalog of qualitative checks. Returns id, name, " +
-        "derived_from (RegulationId[] this check operationalises), expectation, and " +
-        "expected_evidence (artifacts the reviewer must gather). " +
-        "Call get_check for the full record, or get_regulation on any derived_from id " +
-        "to read the underlying law.",
-      inputSchema: { query: z.string() },
+        "Ranked, field-scoped search over the catalog of qualitative checks: name, " +
+        "expectation, expected_evidence. Returns { results, total_matches, offset, truncated }; " +
+        "concise results (default) are { id, name, expectation_first_sentence, derived_from } — " +
+        "pass detail: 'full' for complete records. Call get_check on an id for the full record, " +
+        "or get_regulation on any derived_from id to read the underlying law.",
+      inputSchema: searchInputShape("name, expectation, and expected evidence"),
+      outputSchema: searchOutputShape(z.union([ConciseCheckHit, CheckSchema])),
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ query }) => asJson(await adapters.check.search(query)),
+    async ({ query, limit, offset, detail }) => {
+      const records = await adapters.check.search(query);
+      if (detail === "full") return searchResult(paginate(records, limit, offset));
+      const concise = records.map((c) => ({
+        id: c.id,
+        name: c.name,
+        expectation_first_sentence: firstSentence(c.expectation),
+        derived_from: c.derived_from,
+      }));
+      return searchResult(paginate(concise, limit, offset));
+    },
   );
 
   server.registerTool(
     "get_check",
     {
+      title: "Get check",
       description:
-        "Fetch a check by ID. Returns name, expectation (concrete pass/fail bar), " +
-        "derived_from (RegulationId[] this check operationalises), and expected_evidence " +
-        "(list of artifacts the reviewer must gather). Use get_regulation on any " +
-        "derived_from id to read the underlying law.",
-      inputSchema: { id: checkIdSchema },
+        "Fetch one check by ID. Returns the full record: name, expectation (concrete " +
+        "pass/fail bar), derived_from (RegulationId[] this check operationalises), and " +
+        "expected_evidence (artifacts the reviewer must gather). Unknown ids return isError " +
+        "with a pointer. Use get_regulation on any derived_from id to read the underlying law.",
+      inputSchema: { id: lenient(checkIdSchema).describe("e.g. check://calibration/pd/lra-derived") },
+      outputSchema: CheckSchema,
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ id }) => asJson(await adapters.check.get(id)),
+    async ({ id }) => {
+      const record = await adapters.check.get(id);
+      if (record === null) return miss(`No record for ${id}. Verify the id with search_checks or list_review_areas.`);
+      return ok(record);
+    },
   );
 }

@@ -5,10 +5,12 @@
  * never calling tools.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
 import { adapters } from "../adapters.ts";
-import { sourceIdSchema, SourceStatusSchema } from "../schema.ts";
+import { MilestoneSchema, SourceSchema, SourceStatusSchema, sourceIdSchema } from "../schema.ts";
 import type { Milestone, Source, SourceId, SourceStatus } from "../schema.ts";
+import { READ_ONLY_HINTS, lenient, miss, ok } from "./shared.ts";
 
 // list_sources projection. Members are explicit `| undefined` unions (not
 // optional markers) so direct assignment compiles under
@@ -24,31 +26,41 @@ type SourceSummary = {
   next_milestone: Milestone | undefined;
 };
 
-function asJson(v: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] };
-}
+const SourceSummarySchema = z.object({
+  id: sourceIdSchema,
+  title: z.string(),
+  doc_type: SourceSchema.shape.doc_type,
+  status: SourceStatusSchema,
+  verified: z.string().describe("Last date currency was confirmed against the publisher"),
+  effective_from: z.string().optional(),
+  superseded_by: sourceIdSchema.optional(),
+  next_milestone: MilestoneSchema.optional().describe("First upcoming regulatory date"),
+});
 
 export function registerSourceTools(server: McpServer): void {
   server.registerTool(
     "list_sources",
     {
+      title: "List sources",
       description:
         "The registry of source documents the corpus derives from — the " +
-        "'is my regulatory context current?' answer. Returns per source: id, title, " +
-        "doc_type, status (current | pending | superseded), verified (last date currency " +
-        "was confirmed against the publisher), effective_from, superseded_by, and " +
-        "next_milestone (the first upcoming regulatory date; milestones are kept " +
-        "chronological). Optionally filter by status. Call get_source for the full " +
-        "record including all milestones, or search_regulation for corpus content " +
-        "under a document (sources join regulation records via document_id).",
+        "'is my regulatory context current?' answer. Returns { sources: [...] } with, per " +
+        "source: id, title, doc_type, status (current | pending | superseded), verified " +
+        "(last date currency was confirmed against the publisher), effective_from, " +
+        "superseded_by, and next_milestone (the first upcoming regulatory date; milestones " +
+        "are kept chronological). Optionally filter by status. Call get_source for the full " +
+        "record including all milestones, or search_regulation for corpus content under a " +
+        "document (sources join regulation records via framework + document_id).",
       inputSchema: {
         status: SourceStatusSchema.optional().describe("Filter by lifecycle status."),
       },
+      outputSchema: { sources: z.array(SourceSummarySchema) },
+      annotations: READ_ONLY_HINTS,
     },
     async ({ status }) => {
       const sources = await adapters.source.list(status === undefined ? undefined : { status });
-      return asJson(
-        sources.map(
+      return ok({
+        sources: sources.map(
           (s): SourceSummary => ({
             id: s.id,
             title: s.title,
@@ -60,22 +72,29 @@ export function registerSourceTools(server: McpServer): void {
             next_milestone: s.milestones[0],
           }),
         ),
-      );
+      });
     },
   );
 
   server.registerTool(
     "get_source",
     {
+      title: "Get source",
       description:
-        "Fetch a source document record by ID. Returns title, framework, document_id " +
-        "(joins to Regulation.document_id), doc_type, status, published / effective_from / " +
-        "verified dates, superseded_by (set when status is superseded), milestones " +
-        "(upcoming regulatory dates, chronological), url, and notes — or null if the id " +
-        "is unknown. Use list_sources to see the whole registry, or search_regulation " +
-        "for the corpus content derived from this document.",
-      inputSchema: { id: sourceIdSchema },
+        "Fetch one source document record by ID. Returns the full record: title, framework, " +
+        "document_id (joins to Regulation.document_id), doc_type, status, published / " +
+        "effective_from / verified dates, superseded_by (set when status is superseded), " +
+        "milestones (upcoming regulatory dates, chronological), url, and notes. Unknown ids " +
+        "return isError with a pointer. Use list_sources to see the whole registry, or " +
+        "search_regulation for the corpus content derived from this document.",
+      inputSchema: { id: lenient(sourceIdSchema).describe("e.g. source://eba/gl-2017-16") },
+      outputSchema: SourceSchema,
+      annotations: READ_ONLY_HINTS,
     },
-    async ({ id }) => asJson(await adapters.source.get(id)),
+    async ({ id }) => {
+      const record = await adapters.source.get(id);
+      if (record === null) return miss(`No record for ${id}. Verify the id with list_sources.`);
+      return ok(record);
+    },
   );
 }

@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ZodError } from "zod";
 
-import { createFileAdapters, loadCorpusFile } from "../src/file-adapter.ts";
+import { createFileAdapters, loadCorpusFile, resolveCitationIn } from "../src/file-adapter.ts";
+import type { Regulation } from "../src/schema.ts";
 
 // The load path deserves a real file: loadCorpusFile is readFileSync + JSON +
 // zod, and everything downstream (MCPB entry, CORPUS_FILE validation runs)
@@ -239,5 +240,159 @@ describe("createFileAdapters", () => {
     expect(info.coverage).toEqual(["CRR", "EBA"]);
     expect(info.stale_sources).toEqual([]);
     expect(Number.isNaN(Date.parse(info.last_updated))).toBe(false);
+  });
+
+  it("meta.referrers scans playbook phase references, not just regulatory_scope", async () => {
+    // The check appears ONLY inside a phase's references array — the old scan
+    // (regulatory_scope only) returned playbooks: [] here.
+    const checkRefs = await adapters.meta.referrers("check://scope/entities");
+    expect(checkRefs.playbooks).toEqual(["playbook://scope/review"]);
+    // Structural referrer: the regulation that lists the check as a child.
+    expect(checkRefs.regulation).toEqual(["regulation://crr/1"]);
+    expect(checkRefs.tests).toEqual([]);
+    expect(checkRefs.checks).toEqual([]);
+  });
+
+  it("meta.referrers on a regulation covers checks, playbooks, and structure", async () => {
+    const refs = await adapters.meta.referrers("regulation://crr/1");
+    expect(refs.checks).toEqual(["check://scope/entities"]);
+    expect(refs.playbooks).toEqual(["playbook://scope/review"]); // scope + phase reference
+    expect(refs.regulation).toEqual([]);
+  });
+});
+
+// ── as_of resolution against regulation_history ────────────────────────────────
+//
+// The documented rule: no asOf → current; asOf with no history for the id →
+// current (the only version the corpus knows); asOf with history → the last
+// entry with effective_from <= asOf, or null when asOf predates every entry.
+// Current text is selectable under asOf only via a current-boundary entry.
+
+describe("regulation.get(id, asOf) with regulation_history", () => {
+  const currentText = "Materiality assessed against thresholds set in the relevant RTS.";
+  const oldText = "Materiality is left to national competent authority discretion.";
+  const versioned = {
+    id: "regulation://crr/178/1/b",
+    framework: "crr",
+    document_id: "crr",
+    document_version: "2024-01-09",
+    citation: "CRR Article 178(1)(b)",
+    text: currentText,
+  };
+  const historyCorpus = {
+    regulation: [versioned, ...fullCorpus.regulation],
+    regulation_history: [
+      // Deliberately out of order in the file — the adapter must sort.
+      {
+        id: "regulation://crr/178/1/b",
+        effective_from: "2021-06-28",
+        record: versioned, // current-boundary entry: makes the current version as_of-selectable
+      },
+      {
+        id: "regulation://crr/178/1/b",
+        effective_from: "2014-01-01",
+        record: { ...versioned, document_version: "2013-06-26", text: oldText },
+      },
+    ],
+  };
+  const fa = createFileAdapters(loadCorpusFile(writeCorpus("history.json", historyCorpus)));
+
+  it("no asOf serves the current record", async () => {
+    const r = await fa.regulation.get("regulation://crr/178/1/b");
+    expect(r?.text).toBe(currentText);
+  });
+
+  it("asOf between versions serves the version then in force — not current text as historical", async () => {
+    const r = await fa.regulation.get("regulation://crr/178/1/b", "2015-06-01");
+    expect(r?.document_version).toBe("2013-06-26");
+    expect(r?.text).toBe(oldText);
+  });
+
+  it("asOf equal to an effective_from boundary selects that entry (inclusive)", async () => {
+    const atOld = await fa.regulation.get("regulation://crr/178/1/b", "2014-01-01");
+    expect(atOld?.document_version).toBe("2013-06-26");
+    const atCurrent = await fa.regulation.get("regulation://crr/178/1/b", "2021-06-28");
+    expect(atCurrent?.text).toBe(currentText);
+  });
+
+  it("asOf after every entry serves the latest history entry", async () => {
+    const r = await fa.regulation.get("regulation://crr/178/1/b", "2030-01-01");
+    expect(r?.text).toBe(currentText);
+  });
+
+  it("asOf predating every recorded version is null — never current text masquerading", async () => {
+    expect(await fa.regulation.get("regulation://crr/178/1/b", "2010-01-01")).toBeNull();
+  });
+
+  it("asOf on an id without history serves the only version the corpus knows", async () => {
+    const r = await fa.regulation.get("regulation://crr/1", "1999-01-01");
+    expect(r?.citation).toBe("CRR Art. 1");
+  });
+
+  it("asOf on an unknown id is null", async () => {
+    expect(await fa.regulation.get("regulation://nope", "2020-01-01")).toBeNull();
+  });
+
+  it("corpora without regulation_history behave exactly as before", async () => {
+    const plain = createFileAdapters(loadCorpusFile(writeCorpus("no-history.json", fullCorpus)));
+    const r = await plain.regulation.get("regulation://crr/1", "1999-01-01");
+    expect(r?.citation).toBe("CRR Art. 1");
+  });
+});
+
+// ── resolveCitationIn — the deterministic citation matcher ─────────────────────
+//
+// Pins the tool-description examples: the old naive substring matcher returned
+// null for its own example "Art. 178(1)(a)".
+
+describe("resolveCitationIn", () => {
+  const cite = (id: string, citation: string): Regulation => ({
+    id: id as Regulation["id"],
+    framework: id.slice("regulation://".length).split("/")[0]!,
+    document_id: "doc",
+    document_version: "2024-01-09",
+    citation,
+    text: "…",
+    commentary: [],
+    children: [],
+  });
+  const regs = [
+    cite("regulation://crr/178/1/a", "CRR Article 178(1)(a)"),
+    cite("regulation://crr/178/1/b", "CRR Article 178(1)(b)"),
+    cite("regulation://crr/180", "CRR Article 180"),
+    cite("regulation://crr/180/1/a", "CRR Article 180(1)(a)"),
+    cite("regulation://eba/gl-2017-16/78", "EBA GL 2017/16 paragraph 78"),
+  ];
+
+  it("resolves the resolve_citation description examples", () => {
+    expect(resolveCitationIn(regs, "Art. 178(1)(a)")?.id).toBe("regulation://crr/178/1/a");
+    expect(resolveCitationIn(regs, "CRR Article 180")?.id).toBe("regulation://crr/180");
+    expect(resolveCitationIn(regs, "EBA GL 2017/16 para 78")?.id).toBe("regulation://eba/gl-2017-16/78");
+  });
+
+  it("a citation naming a missing node resolves to the closest recorded relative", () => {
+    // No regulation://crr/178 record exists — containment picks the closest
+    // recorded relative (178(1)(a) by normalized-length gap, then corpus order).
+    expect(resolveCitationIn(regs, "CRR Article 178")?.id).toBe("regulation://crr/178/1/a");
+  });
+
+  it("segment extraction matches article/paragraph/point against id paths", () => {
+    // Fails passes (i)/(ii) — no citation contains this prose — so the numeric
+    // and single-letter tokens ["180","1","a"] match the id path directly,
+    // filtered by the "crr" framework token.
+    expect(resolveCitationIn(regs, "please fetch 180(1)(a) from the crr")?.id).toBe(
+      "regulation://crr/180/1/a",
+    );
+  });
+
+  it("returns null for prose that names nothing in the corpus", () => {
+    expect(resolveCitationIn(regs, "the general spirit of prudence")).toBeNull();
+    expect(resolveCitationIn(regs, "")).toBeNull();
+  });
+
+  it("is what the file adapter's meta.resolveCitation delegates to", async () => {
+    const fa = createFileAdapters(loadCorpusFile(writeCorpus("citations.json", { regulation: regs })));
+    const hit = await fa.meta.resolveCitation("Art. 178(1)(a)");
+    expect(hit?.id).toBe("regulation://crr/178/1/a");
   });
 });
