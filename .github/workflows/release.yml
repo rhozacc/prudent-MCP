@@ -5,21 +5,27 @@ name: Release MCPB bundle
 # The dashboard's Connect page and the docs landing both link to
 # /releases/latest, so they resolve as soon as one release exists.
 #
-# Trigger by pushing a version tag (git tag v0.5.0 && git push origin v0.5.0)
-# or by running this workflow manually with a tag name.
+# The version in package.json is the trigger. Every push to main checks whether
+# a release already exists for it: if not, this builds and publishes one and
+# creates the matching tag. So bumping the version in a PR and merging it ships
+# a release; merging anything else is a no-op. No tag to remember to push.
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish (e.g. v0.5.0). Created if it does not exist."
-        required: true
+        description: "Publish this tag instead of the package.json version (e.g. v0.5.0)."
+        required: false
         type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -28,31 +34,57 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install --frozen-lockfile
+      # Decide whether there is anything to publish before doing any work.
+      - name: Resolve version and check for an existing release
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [[ -z "$tag" ]]; then
+            version="$(bun --print "require('./package.json').version")"
+            tag="v${version}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists — nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release for $tag yet — will publish."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.gate.outputs.publish == 'true'
+        run: bun install --frozen-lockfile
 
       # The bundle is only worth shipping if the server it packs is sound.
-      - run: bun run typecheck
-      - run: bun test
+      - if: steps.gate.outputs.publish == 'true'
+        run: bun run typecheck
+      - if: steps.gate.outputs.publish == 'true'
+        run: bun test
 
       - name: Build the .mcpb bundle
+        if: steps.gate.outputs.publish == 'true'
         run: bun run build:mcpb
 
-      - name: Resolve tag and asset name
+      - name: Name the asset
         id: meta
+        if: steps.gate.outputs.publish == 'true'
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           src="$(ls -1 *.mcpb dist/mcpb/*.mcpb 2>/dev/null | head -n1)"
           if [[ -z "$src" ]]; then echo "no .mcpb produced by build:mcpb" >&2; exit 1; fi
-          asset="prudent-mcp-${tag}.mcpb"
+          asset="prudent-mcp-${{ steps.gate.outputs.tag }}.mcpb"
           cp "$src" "$asset"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
+        if: steps.gate.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
+          tag_name: ${{ steps.gate.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.gate.outputs.tag }}
           generate_release_notes: true
           files: ${{ steps.meta.outputs.asset }}
           body: |
