@@ -18,8 +18,8 @@ const ctx = await browser.newContext({
 const page = await ctx.newPage();
 
 await page.goto(URL, { waitUntil: "networkidle" });
-await page.waitForSelector(".VPHero", { timeout: 15_000 });
-// Let webfonts settle so the Caslon-style hero text renders, not a fallback.
+await page.waitForSelector(".register", { timeout: 15_000 });
+// Let webfonts settle so the ledger faces render, not a fallback.
 await page.evaluate(() => (document as any).fonts?.ready);
 
 await mkdir(dirname(OUT), { recursive: true });

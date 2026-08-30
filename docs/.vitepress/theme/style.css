@@ -1,239 +1,356 @@
-/* prudent-mcp brand theme
- * ─ Prudent Blue  #3A58FF
- * ─ Graphite      #3A3A3A
- * ─ White         #FFFFFF
- * ─ Display serif: Source Serif Pro
- * ─ Sans:         Inter (Neo Grotesque)
- */
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE EVIDENCE LEDGER — prudent-mcp documentation theme
+ *
+ * IRB validation is forensic work: nothing counts unless it is anchored to
+ * law, dated, and countersigned. The site renders itself as the instrument
+ * of that discipline — a supervisory register, not a marketing page. Its
+ * grammar: ledger ruling, tables of authorities, exhibit-framed code,
+ * statute line numbers, and the violet rubber stamp of European bureaucracy.
+ *
+ *   Ruled Paper   #F0F1EB   light ground (accounting ledger stock)
+ *   Registry Black#17191C   dark ground (carbon copy, blue cast)
+ *   Iron Gall     #24282B   ink on light
+ *   Archive White #DCD9CF   ink on dark (microfiche warmth)
+ *   Stamp Violet  #4B3E8E / #9C8FE0   the accent — stamp-pad violet
+ *   Sealing Red   #9E2F26 / #C96A5C   RESERVED for stale/superseded only
+ *   Ledger Rule   #C4CABB / #3A4038   every hairline on the site
+ *
+ *   Display: Besley (Clarendon of law reports and bank registers)
+ *   Body:    Source Serif 4 (screen-first gravity, optical sizes)
+ *   Mono:    IBM Plex Mono (URIs are the product's syntax)
+ * ═══════════════════════════════════════════════════════════════════════ */
 
-@import url("https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+/* ─── Tokens ─────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand palette */
-  --prudent-blue:        #3A58FF;
-  --prudent-blue-hover:  #2541E0;
-  --prudent-blue-soft:   #EEF1FF;
-  --prudent-graphite:    #3A3A3A;
-  --prudent-white:       #FFFFFF;
-  --prudent-paper:       #F7F8FB;
+  --ledger-paper:      #F0F1EB;
+  --ledger-paper-alt:  #E9EBE2;
+  --ledger-ink:        #24282B;
+  --ledger-ink-soft:   #5B6158;
+  --ledger-ink-faint:  #8A9084;
+  --ledger-rule:       #C4CABB;
+  --ledger-rule-soft:  #D7DCCE;
+  --ledger-violet:     #4B3E8E;
+  --ledger-violet-ink: #3A2F73;
+  --ledger-violet-soft: rgba(75, 62, 142, 0.09);
+  --ledger-red:        #9E2F26;
+  --ledger-red-soft:   rgba(158, 47, 38, 0.08);
 
-  /* Typography */
-  --vp-font-family-base:    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --vp-font-family-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --prudent-font-display:   "Source Serif Pro", "Hoefler Text", Georgia, serif;
+  --ledger-display: "Besley", "Iowan Old Style", Georgia, serif;
 
-  /* Map brand to VitePress tokens */
-  --vp-c-brand-1:        var(--prudent-blue);
-  --vp-c-brand-2:        var(--prudent-blue-hover);
-  --vp-c-brand-3:        var(--prudent-blue-hover);
-  --vp-c-brand-soft:     var(--prudent-blue-soft);
-  --vp-c-brand:          var(--prudent-blue);
-  --vp-c-brand-light:    #5C77FF;
-  --vp-c-brand-lighter:  #8197FF;
-  --vp-c-brand-dark:     var(--prudent-blue-hover);
+  /* VitePress token mapping */
+  --vp-font-family-base: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --vp-font-family-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --vp-c-text-1:         var(--prudent-graphite);
-  --vp-c-bg:             var(--prudent-white);
-  --vp-c-bg-alt:         var(--prudent-paper);
+  --vp-c-brand-1: var(--ledger-violet);
+  --vp-c-brand-2: var(--ledger-violet-ink);
+  --vp-c-brand-3: var(--ledger-violet-ink);
+  --vp-c-brand-soft: var(--ledger-violet-soft);
+  --vp-c-brand: var(--ledger-violet);
 
-  /* Home hero gradient ─ subtle Prudent Blue wash */
-  --vp-home-hero-name-color: var(--prudent-blue);
-  --vp-home-hero-name-background: none;
-  --vp-home-hero-image-background-image: radial-gradient(
-    circle at 35% 35%,
-    rgba(58, 88, 255, 0.10),
-    rgba(58, 88, 255, 0) 65%
-  );
-  --vp-home-hero-image-filter: blur(60px);
+  --vp-c-bg: var(--ledger-paper);
+  --vp-c-bg-alt: var(--ledger-paper-alt);
+  --vp-c-bg-soft: var(--ledger-paper-alt);
+  --vp-c-bg-elv: var(--ledger-paper);
 
-  /* Buttons */
-  --vp-button-brand-bg:          var(--prudent-blue);
-  --vp-button-brand-hover-bg:    var(--prudent-blue-hover);
-  --vp-button-brand-active-bg:   var(--prudent-blue-hover);
-  --vp-button-brand-border:      var(--prudent-blue);
-  --vp-button-brand-hover-border: var(--prudent-blue-hover);
-  --vp-button-brand-text:        var(--prudent-white);
-  --vp-button-brand-hover-text:  var(--prudent-white);
+  --vp-c-text-1: var(--ledger-ink);
+  --vp-c-text-2: var(--ledger-ink-soft);
+  --vp-c-text-3: var(--ledger-ink-faint);
+
+  --vp-c-divider: var(--ledger-rule);
+  --vp-c-border: var(--ledger-rule);
+  --vp-c-gutter: var(--ledger-rule);
+
+  --vp-c-danger-1: var(--ledger-red);
+  --vp-c-danger-soft: var(--ledger-red-soft);
+
+  --vp-button-brand-bg: var(--ledger-violet);
+  --vp-button-brand-hover-bg: var(--ledger-violet-ink);
+  --vp-button-brand-active-bg: var(--ledger-violet-ink);
+  --vp-button-brand-border: var(--ledger-violet);
+  --vp-button-brand-hover-border: var(--ledger-violet-ink);
+  --vp-button-brand-text: var(--ledger-paper);
+  --vp-button-brand-hover-text: var(--ledger-paper);
+
+  --vp-code-color: var(--ledger-violet);
+  --vp-code-bg: var(--ledger-violet-soft);
+  --vp-code-block-bg: #EAECE3;
+
+  --vp-nav-bg-color: var(--ledger-paper);
+  --vp-sidebar-bg-color: var(--ledger-paper-alt);
 }
 
 .dark {
-  --vp-c-bg:        #0E1116;
-  --vp-c-bg-alt:    #15191F;
-  --vp-c-text-1:    #ECECEC;
-  --vp-c-brand-1:   #6E86FF;
-  --vp-c-brand-2:   #8197FF;
-  --vp-c-brand-3:   #8197FF;
-  --vp-c-brand-soft: rgba(58, 88, 255, 0.18);
+  --ledger-paper:      #17191C;
+  --ledger-paper-alt:  #1D2024;
+  --ledger-ink:        #DCD9CF;
+  --ledger-ink-soft:   #9A9E92;
+  --ledger-ink-faint:  #6E7368;
+  --ledger-rule:       #3A4038;
+  --ledger-rule-soft:  #2C312B;
+  --ledger-violet:     #9C8FE0;
+  --ledger-violet-ink: #B3A8EC;
+  --ledger-violet-soft: rgba(156, 143, 224, 0.13);
+  --ledger-red:        #C96A5C;
+  --ledger-red-soft:   rgba(201, 106, 92, 0.12);
 
-  --vp-home-hero-name-color: #8197FF;
-  --vp-home-hero-image-background-image: radial-gradient(
-    circle at 30% 30%,
-    rgba(110, 134, 255, 0.28),
-    rgba(110, 134, 255, 0) 60%
-  );
+  --vp-c-bg: var(--ledger-paper);
+  --vp-c-bg-alt: var(--ledger-paper-alt);
+  --vp-c-bg-soft: var(--ledger-paper-alt);
+  --vp-c-bg-elv: var(--ledger-paper-alt);
+  --vp-c-text-1: var(--ledger-ink);
+  --vp-c-text-2: var(--ledger-ink-soft);
+  --vp-c-text-3: var(--ledger-ink-faint);
+  --vp-c-divider: var(--ledger-rule);
+  --vp-c-border: var(--ledger-rule);
+  --vp-c-gutter: var(--ledger-rule);
+  --vp-c-brand-1: var(--ledger-violet);
+  --vp-c-brand-2: var(--ledger-violet-ink);
+  --vp-c-brand-3: var(--ledger-violet-ink);
+  --vp-c-brand-soft: var(--ledger-violet-soft);
+  --vp-c-danger-1: var(--ledger-red);
+  --vp-c-danger-soft: var(--ledger-red-soft);
+  --vp-code-block-bg: #1D2024;
+  --vp-button-brand-text: #17191C;
+  --vp-button-brand-hover-text: #17191C;
+  --vp-nav-bg-color: var(--ledger-paper);
+  --vp-sidebar-bg-color: var(--ledger-paper-alt);
 }
 
-/* ─── Display typography ─────────────────────────────────────────────────── */
+/* ─── Base typography ───────────────────────────────────────────────────── */
 
-.VPHero .name,
-.VPHero .text {
-  font-family: var(--prudent-font-display);
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  line-height: 1.05;
+body {
+  font-feature-settings: "onum" 0, "tnum" 0;
+  -webkit-font-smoothing: antialiased;
 }
 
-.VPHero .name {
-  font-size: clamp(2.4rem, 4.5vw, 4rem);
+.vp-doc {
+  font-size: 16px;
+  line-height: 1.72;
 }
 
-.VPHero .text {
-  font-size: clamp(2rem, 3.6vw, 3.2rem);
-  color: var(--vp-c-text-1);
+.vp-doc h1 {
+  font-family: var(--ledger-display);
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.12;
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
 }
 
-.VPHero .tagline {
-  font-family: var(--vp-font-family-base);
-  font-weight: 400;
-  font-size: 1.05rem;
-  line-height: 1.55;
-  max-width: 36rem;
+/* H2 as register section heads: double hairline above, small folio rule */
+.vp-doc h2 {
+  font-family: var(--ledger-display);
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  font-size: 1.42rem;
+  border-top: 3px double var(--ledger-rule);
+  padding-top: 1.35rem;
+  margin-top: 2.8rem;
+}
+
+.vp-doc h3 {
+  font-family: var(--ledger-display);
+  font-weight: 600;
+  font-size: 1.12rem;
+  margin-top: 2.1rem;
+}
+
+.vp-doc h4 {
+  font-family: var(--vp-font-family-mono);
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--vp-c-text-2);
 }
 
-/* Page H1s pick up the editorial serif too */
-.vp-doc h1 {
-  font-family: var(--prudent-font-display);
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  font-size: clamp(2rem, 3.2vw, 2.6rem);
+/* Links: violet, ruled like an entry, never bare */
+.vp-doc a {
+  color: var(--ledger-violet);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ledger-violet) 40%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.12s ease;
+}
+.vp-doc a:hover {
+  color: var(--ledger-violet-ink);
+  text-decoration-color: var(--ledger-violet-ink);
 }
 
-/* H2/H3 stay in the sans for scanability, with brand accent */
-.vp-doc h2 {
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  border-top: 1px solid var(--vp-c-divider);
-  padding-top: 1.5rem;
-  margin-top: 2.5rem;
+/* Inline code: registry entries, square-shouldered */
+.vp-doc :not(pre) > code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.84em;
+  color: var(--ledger-violet);
+  background: var(--ledger-violet-soft);
+  border-radius: 2px;
+  padding: 0.12em 0.38em;
 }
+.dark .vp-doc :not(pre) > code { color: var(--ledger-violet-ink); }
 
-/* ─── Brand accents ─────────────────────────────────────────────────────── */
+strong { font-weight: 600; }
+
+/* ─── Nav bar: the register's masthead ──────────────────────────────────── */
+
+.VPNav { border-bottom: 1px solid var(--ledger-rule); }
+.VPNavBar { border-bottom: none !important; }
+.VPNavBar:not(.home) { background: var(--vp-nav-bg-color) !important; }
 
 .VPNavBarTitle .title {
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--prudent-blue);
-}
-.dark .VPNavBarTitle .title { color: #8197FF; }
-
-/* Brand-colored hero action button */
-.VPButton.brand {
-  border-radius: 6px;
-  font-weight: 500;
+  font-family: var(--ledger-display);
+  font-weight: 800;
+  font-size: 1.02rem;
   letter-spacing: 0.005em;
-}
-
-/* Inline code + links carry brand color */
-.vp-doc a {
-  color: var(--prudent-blue);
-  text-decoration-color: rgba(58, 88, 255, 0.35);
-  text-underline-offset: 3px;
-}
-.vp-doc a:hover { color: var(--prudent-blue-hover); }
-.dark .vp-doc a { color: #8197FF; }
-
-.vp-doc :not(pre) > code {
-  color: var(--prudent-blue);
-  background-color: var(--prudent-blue-soft);
-  border-radius: 4px;
-  padding: 0.1em 0.35em;
-  font-size: 0.88em;
-}
-.dark .vp-doc :not(pre) > code {
-  color: #8197FF;
-  background-color: rgba(58, 88, 255, 0.14);
-}
-
-/* Feature cards on the home page ─ flatter, editorial */
-.VPFeature {
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg);
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.VPFeature:hover {
-  border-color: var(--prudent-blue);
-  transform: translateY(-2px);
-}
-.VPFeature .title {
-  font-family: var(--vp-font-family-base);
-  font-weight: 600;
-  letter-spacing: -0.005em;
-}
-
-/* Inline SVG diagrams in markdown ─ stable layout + safe fallback
- * The wrapper is `<div class="diagram" v-pre>` so Vue doesn't hoist the
- * SVG's inline <style> as a page-scoped style block. We also clip overflow
- * and color any descendant <text> via currentColor so a still-loading or
- * broken-style SVG never spills its label text outside the box. */
-.vp-doc .diagram {
-  margin: 1.5rem auto;
-  max-width: 100%;
-  overflow: hidden;
   color: var(--vp-c-text-1);
-  contain: layout paint;
 }
-.vp-doc .diagram svg {
-  display: block;
+
+.VPNavBarMenuLink {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.VPNavBarMenuLink.active { color: var(--ledger-violet) !important; }
+
+/* ─── Sidebar: index tabs ────────────────────────────────────────────────── */
+
+.VPSidebar { border-right: 1px solid var(--ledger-rule); }
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+}
+
+.VPSidebarItem.level-1 .text {
+  font-size: 0.86rem;
+  font-family: var(--vp-font-family-base);
+}
+
+.VPSidebarItem.level-1.is-active > .item .text,
+.VPSidebarItem .item .text:hover { color: var(--ledger-violet); }
+
+/* ─── Buttons: stamped, square-shouldered ───────────────────────────────── */
+
+.VPButton {
+  border-radius: 2px !important;
+  font-family: var(--vp-font-family-mono) !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.VPButton.alt {
+  background: transparent !important;
+  border: 1px solid var(--ledger-rule) !important;
+  color: var(--vp-c-text-1) !important;
+}
+.VPButton.alt:hover { border-color: var(--ledger-violet) !important; color: var(--ledger-violet) !important; }
+
+/* ─── Tables: registers, never cards ─────────────────────────────────────
+ * Horizontal hairlines only. Small-cap mono column heads. No zebra.
+ * Tabular figures so every number sits in a column. */
+
+.vp-doc table {
+  display: table;
   width: 100%;
-  height: auto;
-  max-height: 480px;
+  border-collapse: collapse;
+  border-top: 3px double var(--ledger-rule);
+  border-bottom: 1px solid var(--ledger-rule);
+  margin: 1.6rem 0;
+  font-variant-numeric: tabular-nums;
 }
-/* If the SVG's inline <style> ever fails to apply, keep labels invisible
- * rather than dumping a wall of position-less text into the page. */
-.vp-doc .diagram svg text:not([class]) {
-  visibility: hidden;
+.vp-doc th {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--vp-c-text-2);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ledger-rule);
+  padding: 0.55rem 1.1rem 0.55rem 0;
+}
+.vp-doc td {
+  border: none;
+  border-bottom: 1px solid var(--ledger-rule-soft);
+  background: transparent !important;
+  padding: 0.62rem 1.1rem 0.62rem 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  vertical-align: top;
+}
+.vp-doc tr { background: transparent !important; border: none; }
+.vp-doc tr:last-child td { border-bottom: none; }
+.vp-doc td code, .vp-doc th code { white-space: nowrap; }
+
+/* Wide tables scroll inside their own ruling */
+.vp-doc .table-wrap, .vp-doc table { overflow-x: auto; }
+
+/* ─── Code blocks: exhibits ──────────────────────────────────────────────
+ * Square corners, single hairline frame, a small-cap caption bar above
+ * (EXHIBIT · {lang}), deposition-style line numbers every fifth line. */
+
+.vp-doc div[class*="language-"] {
+  border: 1px solid var(--ledger-rule);
+  border-radius: 0;
+  background: var(--vp-code-block-bg);
+  margin: 1.6rem 0;
+  position: relative;
 }
 
-/* Hero logo: trim shadow, keep it crisp on the gradient wash */
-.VPHero .VPImage {
-  filter: drop-shadow(0 8px 24px rgba(58, 88, 255, 0.18));
+/* Caption bar */
+.vp-doc div[class*="language-"]::before {
+  content: "Exhibit";
+  display: block;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  padding: 0.42rem 1.1rem;
+  border-bottom: 1px solid var(--ledger-rule);
+  background: var(--vp-c-bg-alt);
 }
 
-/* Chrome metal bg lives inside .VPHero via the home-hero-before slot but
- * extends DOWN past VPHero so it sweeps across the .VPFeatures grid too.
- * .VPHero gets overflow: visible to let the child bleed out; .VPHome gets
- * overflow: hidden and isolation so the bleed is clipped to the home page
- * and never reaches the markdown narrative below. */
-.VPHome {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-.VPHero {
-  position: relative;
-  overflow: visible;
-  z-index: 1;
-}
-.VPHero > .container {
-  position: relative;
-  z-index: 2;
-}
-.VPFeatures {
-  position: relative;
-  z-index: 2;
-}
-.VPHome .VPHero {
-  padding-bottom: clamp(3rem, 8vw, 6rem);
+/* Language badge joins the caption bar, right-aligned */
+.vp-doc div[class*="language-"] > .lang {
+  position: absolute;
+  top: 0.42rem;
+  right: 2.6rem;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-3);
 }
 
-/* ─── Code blocks ───────────────────────────────────────────────────────────
- * Wrap long lines by default so URIs, JSON, and shell snippets stay readable
- * without horizontal scroll. `pre-wrap` preserves the original indentation;
- * `break-word` lets unbroken tokens (long URIs, hashes) hyphenate at any char
- * instead of overflowing the box. Shiki wraps each line in a <span class="line">,
- * which also needs the override. */
+.vp-doc div[class*="language-"] > button.copy {
+  top: 0.28rem;
+  right: 0.4rem;
+  height: 1.6rem;
+  width: 1.6rem;
+  border-radius: 2px;
+  background-size: 14px;
+  border: none;
+}
+
+.vp-doc div[class*="language-"] pre {
+  padding: 1rem 1.1rem;
+  background: transparent;
+}
+
+/* Wrap long lines: URIs and JSON must never force horizontal scroll */
 .vp-doc div[class*="language-"] pre,
 .vp-doc div[class*="language-"] pre code,
 .vp-doc div[class*="language-"] pre code .line {
@@ -242,17 +359,398 @@
   overflow-wrap: anywhere;
   tab-size: 2;
 }
+.vp-doc div[class*="language-"] pre { overflow-x: hidden; }
 
-/* Hide the copy-button line-number gutter glitch that can appear once lines
- * wrap — keep the block flowing edge-to-edge of its padded box. */
-.vp-doc div[class*="language-"] pre {
-  overflow-x: hidden;
+/* Deposition line numbers: count every line, print every fifth */
+.vp-doc div[class*="language-"] pre code {
+  counter-reset: exhibit-line;
+  display: block;
+}
+.vp-doc div[class*="language-"] pre code .line {
+  counter-increment: exhibit-line;
+  position: relative;
+  display: block;
+  padding-left: 2.2rem;
+  min-height: 1.4em;
+}
+.vp-doc div[class*="language-"] pre code .line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 1.7rem;
+  text-align: right;
+  font-size: 0.66rem;
+  color: var(--vp-c-text-3);
+  user-select: none;
+}
+.vp-doc div[class*="language-"] pre code .line:nth-child(5n)::before {
+  content: counter(exhibit-line);
 }
 
-/* ─── Mobile spacing ────────────────────────────────────────────────────────
- * The default doc container side padding feels cramped on phones, especially
- * next to wrapped code blocks. Widen the breathing room and bump the
- * code-block inner padding so wrapped lines don't kiss the edge. */
+/* Horizontal rules stay quiet — section weight belongs to the h2 double rule */
+.vp-doc hr {
+  border: none;
+  border-top: 1px solid var(--ledger-rule-soft);
+  margin: 2rem 0 0;
+}
+
+/* ─── Custom blocks (tips/warnings) as marginal rulings ─────────────────── */
+
+.vp-doc .custom-block {
+  border-radius: 0;
+  border: none;
+  border-left: 2px solid var(--ledger-rule);
+  background: var(--vp-c-bg-alt);
+  font-size: 0.9rem;
+}
+.vp-doc .custom-block.tip { border-left-color: var(--ledger-violet); }
+.vp-doc .custom-block.warning { border-left-color: var(--ledger-red); }
+.vp-doc .custom-block.danger { border-left-color: var(--ledger-red); background: var(--ledger-red-soft); }
+.vp-doc .custom-block-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * LEDGER COMPONENTS — the signature devices
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── The docket line ────────────────────────────────────────────────────
+ * Every cross-reference renders as a ruled ledger entry: a boxed scheme
+ * tab, the URI in mono, a dotted leader running to a right-hand status
+ * column. Nothing that references anything is ever a bare link. */
+
+.docket {
+  list-style: none;
+  margin: 1.2rem 0;
+  padding: 0;
+  border-top: 1px solid var(--ledger-rule);
+}
+.docket li, .docket-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.52rem 0.1rem;
+  border-bottom: 1px solid var(--ledger-rule-soft);
+  margin: 0;
+}
+.docket .tab, .doc-tab {
+  flex: none;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--ledger-rule);
+  color: var(--vp-c-text-2);
+  padding: 0.08rem 0.4rem;
+  min-width: 2.6rem;
+  text-align: center;
+  text-transform: uppercase;
+  align-self: center;
+}
+.docket .uri, .doc-uri {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82rem;
+  color: var(--vp-c-text-1);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.docket a.uri { text-decoration: none; color: var(--ledger-violet); }
+.docket a.uri:hover { text-decoration: underline; }
+.docket .leader {
+  flex: 1;
+  border-bottom: 1px dotted var(--ledger-rule);
+  transform: translateY(-0.32em);
+  min-width: 1.4rem;
+}
+.docket .col {
+  flex: none;
+  font-size: 0.78rem;
+  color: var(--vp-c-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Typed-edge annotation: the relationship name set along the rule */
+.edge-label {
+  font-family: var(--vp-font-family-base);
+  font-style: italic;
+  font-size: 0.78rem;
+  color: var(--vp-c-text-2);
+  flex: none;
+}
+
+/* ─── The stamp ──────────────────────────────────────────────────────────
+ * Currency, verified. Sealing red is reserved for stale/superseded —
+ * its rarity is the signal. */
+
+.stamp {
+  display: inline-block;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ledger-violet);
+  border: 1.5px solid var(--ledger-violet);
+  border-radius: 2px;
+  padding: 0.14rem 0.5rem;
+  transform: rotate(-1.4deg);
+  white-space: nowrap;
+}
+.stamp.stale, .stamp.superseded {
+  color: var(--ledger-red);
+  border-color: var(--ledger-red);
+  transform: rotate(-2.2deg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * THE REGISTER — landing page
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.register { max-width: 880px; margin: 0 auto; padding: 3.4rem 24px 4rem; }
+
+.register .eyebrow {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  margin: 0 0 1rem;
+}
+
+.register h1.masthead {
+  font-family: var(--ledger-display);
+  font-weight: 800;
+  font-size: clamp(2.6rem, 6vw, 4.1rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  margin: 0 0 1.1rem;
+  border: none;
+  padding: 0;
+}
+
+.register .standfirst {
+  font-size: 1.13rem;
+  line-height: 1.66;
+  max-width: 44rem;
+  color: var(--vp-c-text-1);
+  margin: 0 0 1.6rem;
+}
+.register .standfirst em { font-style: italic; }
+
+.register .actions { display: flex; gap: 0.8rem; flex-wrap: wrap; margin: 0 0 2.4rem; }
+.register .actions a {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 0.62rem 1.15rem;
+  border-radius: 2px;
+  border: 1px solid var(--ledger-violet);
+}
+.register .actions a.primary { background: var(--ledger-violet); color: var(--ledger-paper); }
+.register .actions a.primary:hover { background: var(--ledger-violet-ink); border-color: var(--ledger-violet-ink); }
+.dark .register .actions a.primary { color: #17191C; }
+.register .actions a.quiet { border-color: var(--ledger-rule); color: var(--vp-c-text-1); }
+.register .actions a.quiet:hover { border-color: var(--ledger-violet); color: var(--ledger-violet); }
+
+/* Masthead stat row: a ledger header */
+.register .statrow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 3px double var(--ledger-rule);
+  border-bottom: 1px solid var(--ledger-rule);
+  margin: 0 0 2.8rem;
+}
+.register .statrow .cell {
+  padding: 0.85rem 1rem 0.9rem 0;
+  border-right: 1px solid var(--ledger-rule-soft);
+}
+.register .statrow .cell:last-child { border-right: none; }
+.register .statrow .cell:not(:first-child) { padding-left: 1rem; }
+.register .statrow .k {
+  font-family: var(--ledger-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.register .statrow .v {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  margin-top: 0.25rem;
+}
+
+/* Section heads inside the register */
+.register h2.rsec {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  border-top: 3px double var(--ledger-rule);
+  padding-top: 0.8rem;
+  margin: 2.6rem 0 1.1rem;
+}
+
+/* The statute excerpt: body of the record under examination */
+.register .statute {
+  border-left: 2px solid var(--ledger-rule);
+  padding: 0.35rem 0 0.35rem 1.35rem;
+  margin: 0 0 0.4rem;
+}
+.register .statute .cite {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ledger-violet);
+  margin-bottom: 0.4rem;
+}
+.register .statute .body {
+  font-size: 1.04rem;
+  line-height: 1.68;
+  max-width: 42rem;
+}
+.register .statute .provenance {
+  margin-top: 0.55rem;
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--vp-c-text-2);
+}
+
+/* Two-column read-twice: chain + machine truth */
+.register .readtwice {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 2.2rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .register .readtwice { grid-template-columns: 1fr; }
+  .register .statrow { grid-template-columns: repeat(2, 1fr); }
+  .register .statrow .cell:nth-child(2) { border-right: none; }
+}
+
+/* Machine-truth exhibit on the landing (hand-built, not Shiki) */
+.register .exhibit {
+  border: 1px solid var(--ledger-rule);
+  background: var(--vp-code-block-bg);
+}
+.register .exhibit .cap {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  padding: 0.42rem 1rem;
+  border-bottom: 1px solid var(--ledger-rule);
+  background: var(--vp-c-bg-alt);
+  display: flex;
+  justify-content: space-between;
+}
+.register .exhibit pre {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--vp-c-text-1);
+}
+.register .exhibit .key { color: var(--ledger-violet); }
+
+/* Quickstart strip */
+.register .install {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--ledger-rule);
+  border-bottom: 1px solid var(--ledger-rule);
+}
+@media (max-width: 760px) { .register .install { grid-template-columns: 1fr; } }
+.register .install .step {
+  padding: 1rem 1.2rem 1.1rem 0;
+  border-right: 1px solid var(--ledger-rule-soft);
+}
+.register .install .step:last-child { border-right: none; }
+.register .install .step:not(:first-child) { padding-left: 1.2rem; }
+@media (max-width: 760px) {
+  .register .install .step { border-right: none; border-bottom: 1px solid var(--ledger-rule-soft); padding-left: 0; }
+  .register .install .step:last-child { border-bottom: none; }
+}
+.register .install .n {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  margin-bottom: 0.45rem;
+}
+.register .install code {
+  display: block;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  color: var(--vp-c-text-1);
+  background: none;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.register .foot {
+  margin-top: 2.6rem;
+  font-size: 0.84rem;
+  color: var(--vp-c-text-2);
+  max-width: 44rem;
+  line-height: 1.7;
+}
+
+/* ─── Inline SVG diagrams in markdown (kept from prior theme) ───────────── */
+
+.vp-doc .diagram {
+  margin: 1.5rem auto;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--vp-c-text-1);
+  contain: layout paint;
+}
+.vp-doc .diagram svg { display: block; width: 100%; height: auto; max-height: 480px; }
+.vp-doc .diagram svg text:not([class]) { visibility: hidden; }
+
+/* Legacy flow blocks (guide pages), restyled as register entries */
+.vp-doc .flow { margin: 1.4rem 0; border-top: 1px solid var(--ledger-rule); }
+.vp-doc .flow-step { border-bottom: 1px solid var(--ledger-rule-soft); padding: 0.7rem 0.2rem; }
+.vp-doc .flow-tag {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  margin-bottom: 0.25rem;
+}
+.vp-doc .flow-body { font-size: 0.92rem; line-height: 1.6; }
+.vp-doc .flow-arrow { display: none; }
+
+/* ─── Mobile ────────────────────────────────────────────────────────────── */
+
 @media (max-width: 768px) {
   .VPDoc:not(.has-sidebar) .container,
   .VPDoc .content-container,
@@ -260,8 +758,6 @@
     padding-left: 24px;
     padding-right: 24px;
   }
-
-  .vp-doc div[class*="language-"] pre {
-    padding: 18px 20px;
-  }
+  .vp-doc div[class*="language-"] pre { padding: 0.9rem 1rem; }
+  .register { padding-top: 2.2rem; }
 }
