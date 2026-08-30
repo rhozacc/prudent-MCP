@@ -70,6 +70,26 @@ The curated **prudent corpus** — the full body of regulation, tests, checks, p
 
 [Bun](https://bun.sh) · TypeScript strict · [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) · [zod](https://zod.dev) · template-literal URI types for compile-time surface segregation
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) — development setup, the checks CI runs, the two
+boundaries that are not negotiable (no corpus in this repo, no write path in the server),
+and the CLA.
+
 ## License
 
-[AGPL-3.0](./LICENSE)
+[AGPL-3.0-only](./LICENSE) — the server code, and only the server code.
+
+Running it, unmodified, against your own corpus carries no obligation. Building on
+it is where the copyleft bites: a modified version offered to users over a network
+has to offer them its source too (AGPL §13), which covers the transport, auth and
+metering layer a hosted deployment necessarily adds.
+
+Two things sit outside that grant. The **prudent corpus** is a separate proprietary
+product under its own licence — data read at runtime is not a derivative work of the
+program that reads it, so nothing here applies to it. And embedding, OEM and on-prem
+deployments are available under a **commercial licence** instead of the AGPL: contact
+Econlab.
+
+Third-party components bundled into the `.mcpb` are listed in
+[THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).

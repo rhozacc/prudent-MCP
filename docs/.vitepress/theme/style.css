@@ -1,356 +1,354 @@
-/* ═══════════════════════════════════════════════════════════════════════════
- * THE EVIDENCE LEDGER — prudent-mcp documentation theme
+/* ───────────────────────────────────────────────────────────────────────────
+ * PRUDENT MINIMAL — prudent-mcp documentation theme
  *
- * IRB validation is forensic work: nothing counts unless it is anchored to
- * law, dated, and countersigned. The site renders itself as the instrument
- * of that discipline — a supervisory register, not a marketing page. Its
- * grammar: ledger ruling, tables of authorities, exhibit-framed code,
- * statute line numbers, and the violet rubber stamp of European bureaucracy.
+ * The same design system as the dashboard, translated onto VitePress:
+ * neutral greys, one teal accent, hairline borders, 4px radius, no shadows,
+ * no gradients, no ornament. Dense over airy. One text face, one mono face.
  *
- *   Ruled Paper   #F0F1EB   light ground (accounting ledger stock)
- *   Registry Black#17191C   dark ground (carbon copy, blue cast)
- *   Iron Gall     #24282B   ink on light
- *   Archive White #DCD9CF   ink on dark (microfiche warmth)
- *   Stamp Violet  #4B3E8E / #9C8FE0   the accent — stamp-pad violet
- *   Sealing Red   #9E2F26 / #C96A5C   RESERVED for stale/superseded only
- *   Ledger Rule   #C4CABB / #3A4038   every hairline on the site
- *
- *   Display: Besley (Clarendon of law reports and bank registers)
- *   Body:    Source Serif 4 (screen-first gravity, optical sizes)
- *   Mono:    IBM Plex Mono (URIs are the product's syntax)
- * ═══════════════════════════════════════════════════════════════════════ */
+ * Everything below reads from tokens. Light and dark are the same rules with
+ * a different token block, so nothing needs a per-theme override.
+ * ─────────────────────────────────────────────────────────────────────── */
 
-/* ─── Tokens ─────────────────────────────────────────────────────────────── */
+/* ─── Tokens ───────────────────────────────────────────────────────────── */
 
 :root {
-  --ledger-paper:      #F0F1EB;
-  --ledger-paper-alt:  #E9EBE2;
-  --ledger-ink:        #24282B;
-  --ledger-ink-soft:   #5B6158;
-  --ledger-ink-faint:  #8A9084;
-  --ledger-rule:       #C4CABB;
-  --ledger-rule-soft:  #D7DCCE;
-  --ledger-violet:     #4B3E8E;
-  --ledger-violet-ink: #3A2F73;
-  --ledger-violet-soft: rgba(75, 62, 142, 0.09);
-  --ledger-red:        #9E2F26;
-  --ledger-red-soft:   rgba(158, 47, 38, 0.08);
+  /* Neutrals — mirrors app/globals.css :root */
+  --background:       oklch(1 0 0);
+  --foreground:       oklch(0.145 0 0);
+  --muted:            oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --border:           oklch(0.922 0 0);
 
-  --ledger-display: "Besley", "Iowan Old Style", Georgia, serif;
+  /* The single accent */
+  --primary:            oklch(0.52 0.09 195);
+  --primary-strong:     oklch(0.44 0.09 195);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary-soft:       oklch(0.52 0.09 195 / 9%);
 
-  /* VitePress token mapping */
-  --vp-font-family-base: "Source Serif 4", "Iowan Old Style", Georgia, serif;
-  --vp-font-family-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Status */
+  --ok:   oklch(0.60 0.14 150);
+  --warn: oklch(0.68 0.15 75);
+  --crit: oklch(0.58 0.20 27);
 
-  --vp-c-brand-1: var(--ledger-violet);
-  --vp-c-brand-2: var(--ledger-violet-ink);
-  --vp-c-brand-3: var(--ledger-violet-ink);
-  --vp-c-brand-soft: var(--ledger-violet-soft);
-  --vp-c-brand: var(--ledger-violet);
+  /* Surface identity — shown as a dot or a hairline tag, never a filled block */
+  --surface-regulation: oklch(0.62 0.16 145);
+  --surface-test:       oklch(0.60 0.14 220);
+  --surface-check:      oklch(0.56 0.17 305);
+  --surface-commentary: oklch(0.66 0.15 85);
+  --surface-playbook:   oklch(0.58 0.18 25);
 
-  --vp-c-bg: var(--ledger-paper);
-  --vp-c-bg-alt: var(--ledger-paper-alt);
-  --vp-c-bg-soft: var(--ledger-paper-alt);
-  --vp-c-bg-elv: var(--ledger-paper);
+  --radius: 4px;
 
-  --vp-c-text-1: var(--ledger-ink);
-  --vp-c-text-2: var(--ledger-ink-soft);
-  --vp-c-text-3: var(--ledger-ink-faint);
+  /* VitePress mapping */
+  --vp-font-family-base: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --vp-c-divider: var(--ledger-rule);
-  --vp-c-border: var(--ledger-rule);
-  --vp-c-gutter: var(--ledger-rule);
+  --vp-c-bg:      var(--background);
+  --vp-c-bg-alt:  var(--muted);
+  --vp-c-bg-soft: var(--muted);
+  --vp-c-bg-elv:  var(--background);
 
-  --vp-c-danger-1: var(--ledger-red);
-  --vp-c-danger-soft: var(--ledger-red-soft);
+  --vp-c-text-1: var(--foreground);
+  --vp-c-text-2: var(--muted-foreground);
+  --vp-c-text-3: var(--muted-foreground);
 
-  --vp-button-brand-bg: var(--ledger-violet);
-  --vp-button-brand-hover-bg: var(--ledger-violet-ink);
-  --vp-button-brand-active-bg: var(--ledger-violet-ink);
-  --vp-button-brand-border: var(--ledger-violet);
-  --vp-button-brand-hover-border: var(--ledger-violet-ink);
-  --vp-button-brand-text: var(--ledger-paper);
-  --vp-button-brand-hover-text: var(--ledger-paper);
+  --vp-c-divider: var(--border);
+  --vp-c-border:  var(--border);
+  --vp-c-gutter:  var(--border);
 
-  --vp-code-color: var(--ledger-violet);
-  --vp-code-bg: var(--ledger-violet-soft);
-  --vp-code-block-bg: #EAECE3;
+  --vp-c-brand-1:    var(--primary);
+  --vp-c-brand-2:    var(--primary-strong);
+  --vp-c-brand-3:    var(--primary-strong);
+  --vp-c-brand-soft: var(--primary-soft);
+  --vp-c-brand:      var(--primary);
 
-  --vp-nav-bg-color: var(--ledger-paper);
-  --vp-sidebar-bg-color: var(--ledger-paper-alt);
+  --vp-c-danger-1:    var(--crit);
+  --vp-c-danger-soft: color-mix(in oklch, var(--crit) 12%, transparent);
+  --vp-c-warning-1:    var(--warn);
+  --vp-c-warning-soft: color-mix(in oklch, var(--warn) 14%, transparent);
+  --vp-c-tip-1:    var(--primary);
+  --vp-c-tip-soft: var(--primary-soft);
+
+  --vp-button-brand-bg:           var(--primary);
+  --vp-button-brand-border:       var(--primary);
+  --vp-button-brand-text:         var(--primary-foreground);
+  --vp-button-brand-hover-bg:     var(--primary-strong);
+  --vp-button-brand-hover-border: var(--primary-strong);
+  --vp-button-brand-hover-text:   var(--primary-foreground);
+
+  --vp-code-color:     var(--primary-strong);
+  --vp-code-bg:        var(--primary-soft);
+  --vp-code-block-bg:  var(--muted);
+
+  --vp-nav-bg-color:     var(--background);
+  --vp-sidebar-bg-color: var(--background);
+
+  --vp-layout-max-width: 1360px;
+  --vp-nav-height: 52px;
 }
 
 .dark {
-  --ledger-paper:      #17191C;
-  --ledger-paper-alt:  #1D2024;
-  --ledger-ink:        #DCD9CF;
-  --ledger-ink-soft:   #9A9E92;
-  --ledger-ink-faint:  #6E7368;
-  --ledger-rule:       #3A4038;
-  --ledger-rule-soft:  #2C312B;
-  --ledger-violet:     #9C8FE0;
-  --ledger-violet-ink: #B3A8EC;
-  --ledger-violet-soft: rgba(156, 143, 224, 0.13);
-  --ledger-red:        #C96A5C;
-  --ledger-red-soft:   rgba(201, 106, 92, 0.12);
+  --background:       oklch(0.145 0 0);
+  --foreground:       oklch(0.985 0 0);
+  --muted:            oklch(0.205 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border:           oklch(1 0 0 / 12%);
 
-  --vp-c-bg: var(--ledger-paper);
-  --vp-c-bg-alt: var(--ledger-paper-alt);
-  --vp-c-bg-soft: var(--ledger-paper-alt);
-  --vp-c-bg-elv: var(--ledger-paper-alt);
-  --vp-c-text-1: var(--ledger-ink);
-  --vp-c-text-2: var(--ledger-ink-soft);
-  --vp-c-text-3: var(--ledger-ink-faint);
-  --vp-c-divider: var(--ledger-rule);
-  --vp-c-border: var(--ledger-rule);
-  --vp-c-gutter: var(--ledger-rule);
-  --vp-c-brand-1: var(--ledger-violet);
-  --vp-c-brand-2: var(--ledger-violet-ink);
-  --vp-c-brand-3: var(--ledger-violet-ink);
-  --vp-c-brand-soft: var(--ledger-violet-soft);
-  --vp-c-danger-1: var(--ledger-red);
-  --vp-c-danger-soft: var(--ledger-red-soft);
-  --vp-code-block-bg: #1D2024;
-  --vp-button-brand-text: #17191C;
-  --vp-button-brand-hover-text: #17191C;
-  --vp-nav-bg-color: var(--ledger-paper);
-  --vp-sidebar-bg-color: var(--ledger-paper-alt);
+  --primary:            oklch(0.78 0.10 195);
+  --primary-strong:     oklch(0.86 0.09 195);
+  --primary-foreground: oklch(0.145 0 0);
+  --primary-soft:       oklch(0.78 0.10 195 / 14%);
+
+  --ok:   oklch(0.75 0.15 150);
+  --warn: oklch(0.80 0.14 75);
+  --crit: oklch(0.70 0.19 22);
+
+  --surface-regulation: oklch(0.82 0.21 145);
+  --surface-test:       oklch(0.82 0.18 220);
+  --surface-check:      oklch(0.78 0.20 305);
+  --surface-commentary: oklch(0.88 0.19 85);
+  --surface-playbook:   oklch(0.78 0.22 25);
+
+  --vp-c-bg-elv: var(--muted);
+  --vp-code-block-bg: oklch(0.19 0 0);
 }
 
-/* ─── Base typography ───────────────────────────────────────────────────── */
+/* ─── Base ─────────────────────────────────────────────────────────────── */
+
+html { font-size: 16px; }
 
 body {
-  font-feature-settings: "onum" 0, "tnum" 0;
+  font-family: var(--vp-font-family-base);
   -webkit-font-smoothing: antialiased;
+  background: var(--vp-c-bg);
 }
 
 .vp-doc {
-  font-size: 16px;
-  line-height: 1.72;
+  font-size: 0.9375rem;   /* 15px */
+  line-height: 1.55;
+}
+
+.vp-doc p,
+.vp-doc ul,
+.vp-doc ol,
+.vp-doc blockquote { margin: 0.7rem 0; }
+
+.vp-doc li + li { margin-top: 0.2rem; }
+.vp-doc li > ul,
+.vp-doc li > ol { margin: 0.2rem 0; }
+
+/* Headings — plain weight steps, one hairline on h2, tight rhythm */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.vp-doc h5 {
+  font-family: var(--vp-font-family-base);
+  letter-spacing: -0.011em;
+  line-height: 1.25;
 }
 
 .vp-doc h1 {
-  font-family: var(--ledger-display);
-  font-weight: 700;
-  letter-spacing: -0.012em;
-  line-height: 1.12;
-  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  font-size: 1.7rem;
+  font-weight: 650;
+  margin: 0 0 0.5rem;
 }
 
-/* H2 as register section heads: double hairline above, small folio rule */
 .vp-doc h2 {
-  font-family: var(--ledger-display);
-  font-weight: 600;
-  letter-spacing: -0.006em;
-  font-size: 1.42rem;
-  border-top: 3px double var(--ledger-rule);
-  padding-top: 1.35rem;
-  margin-top: 2.8rem;
+  font-size: 1.12rem;
+  font-weight: 620;
+  border-top: 1px solid var(--border);
+  padding-top: 1.1rem;
+  margin-top: 2rem;
+  margin-bottom: 0.6rem;
 }
 
 .vp-doc h3 {
-  font-family: var(--ledger-display);
-  font-weight: 600;
-  font-size: 1.12rem;
-  margin-top: 2.1rem;
+  font-size: 0.98rem;
+  font-weight: 620;
+  margin-top: 1.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .vp-doc h4 {
-  font-family: var(--vp-font-family-mono);
+  font-size: 0.9rem;
   font-weight: 600;
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
+  margin-top: 1.2rem;
+  margin-bottom: 0.3rem;
 }
 
-/* Links: violet, ruled like an entry, never bare */
-.vp-doc a {
-  color: var(--ledger-violet);
-  font-weight: 500;
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--ledger-violet) 40%, transparent);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  transition: text-decoration-color 0.12s ease;
-}
-.vp-doc a:hover {
-  color: var(--ledger-violet-ink);
-  text-decoration-color: var(--ledger-violet-ink);
-}
-
-/* Inline code: registry entries, square-shouldered */
-.vp-doc :not(pre) > code {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.84em;
-  color: var(--ledger-violet);
-  background: var(--ledger-violet-soft);
-  border-radius: 2px;
-  padding: 0.12em 0.38em;
-}
-.dark .vp-doc :not(pre) > code { color: var(--ledger-violet-ink); }
+.vp-doc h2 + h3 { margin-top: 0.9rem; }
+.vp-doc h2 .header-anchor,
+.vp-doc h3 .header-anchor { font-weight: 400; }
 
 strong { font-weight: 600; }
 
-/* ─── Nav bar: the register's masthead ──────────────────────────────────── */
+/* Links — accent, underlined on hover only. Nothing decorative. */
+.vp-doc a {
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+.vp-doc a:hover { text-decoration: underline; }
 
-.VPNav { border-bottom: 1px solid var(--ledger-rule); }
+/* Inline code */
+.vp-doc :not(pre) > code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82em;
+  color: var(--primary-strong);
+  background: var(--primary-soft);
+  border-radius: var(--radius);
+  padding: 0.08em 0.3em;
+}
+
+.vp-doc hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.6rem 0;
+}
+
+.vp-doc blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.9rem;
+  color: var(--muted-foreground);
+}
+
+/* ─── Chrome ───────────────────────────────────────────────────────────── */
+
+.VPNav { border-bottom: 1px solid var(--border); }
 .VPNavBar { border-bottom: none !important; }
+.VPNavBar .divider { display: none; }
 .VPNavBar:not(.home) { background: var(--vp-nav-bg-color) !important; }
 
 .VPNavBarTitle .title {
-  font-family: var(--ledger-display);
-  font-weight: 800;
-  font-size: 1.02rem;
-  letter-spacing: 0.005em;
-  color: var(--vp-c-text-1);
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
 }
 
 .VPNavBarMenuLink {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.76rem !important;
+  font-size: 0.82rem !important;
   font-weight: 500 !important;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
 }
-.VPNavBarMenuLink.active { color: var(--ledger-violet) !important; }
+.VPNavBarMenuLink.active { color: var(--primary) !important; }
 
-/* ─── Sidebar: index tabs ────────────────────────────────────────────────── */
-
-.VPSidebar { border-right: 1px solid var(--ledger-rule); }
+.VPSidebar { border-right: 1px solid var(--border); }
 
 .VPSidebarItem.level-0 > .item > .text {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
-}
-
-.VPSidebarItem.level-1 .text {
-  font-size: 0.86rem;
-  font-family: var(--vp-font-family-base);
-}
-
-.VPSidebarItem.level-1.is-active > .item .text,
-.VPSidebarItem .item .text:hover { color: var(--ledger-violet); }
-
-/* ─── Buttons: stamped, square-shouldered ───────────────────────────────── */
-
-.VPButton {
-  border-radius: 2px !important;
-  font-family: var(--vp-font-family-mono) !important;
-  font-size: 0.78rem !important;
-  font-weight: 600 !important;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.VPSidebarItem.level-0 { padding-bottom: 12px; }
+
+.VPSidebarItem.level-1 .text {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+.VPSidebarItem.level-1.is-active > .item .text { color: var(--primary); }
+.VPSidebarItem .item .text:hover { color: var(--primary); }
+
+.VPDocAsideOutline .outline-title,
+.VPDocAsideOutline .outline-link { font-size: 0.8rem; }
+
+.VPButton {
+  border-radius: var(--radius) !important;
+  font-size: 0.82rem !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
 }
 .VPButton.alt {
   background: transparent !important;
-  border: 1px solid var(--ledger-rule) !important;
-  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
 }
-.VPButton.alt:hover { border-color: var(--ledger-violet) !important; color: var(--ledger-violet) !important; }
+.VPButton.alt:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
 
-/* ─── Tables: registers, never cards ─────────────────────────────────────
- * Horizontal hairlines only. Small-cap mono column heads. No zebra.
- * Tabular figures so every number sits in a column. */
+.VPDocFooter, .VPDocFooterLastUpdated { font-size: 0.82rem; }
+.pager-link { border-radius: var(--radius) !important; box-shadow: none !important; }
+
+/* ─── Tables — dense, hairline, no zebra, no card ──────────────────────── */
 
 .vp-doc table {
   display: table;
   width: 100%;
   border-collapse: collapse;
-  border-top: 3px double var(--ledger-rule);
-  border-bottom: 1px solid var(--ledger-rule);
-  margin: 1.6rem 0;
+  margin: 0.9rem 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
 .vp-doc th {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
   text-align: left;
-  color: var(--vp-c-text-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--ledger-rule);
-  padding: 0.55rem 1.1rem 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.9rem 0.3rem 0;
+  white-space: nowrap;
 }
 .vp-doc td {
   border: none;
-  border-bottom: 1px solid var(--ledger-rule-soft);
+  border-bottom: 1px solid var(--border);
   background: transparent !important;
-  padding: 0.62rem 1.1rem 0.62rem 0;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  padding: 0.36rem 0.9rem 0.36rem 0;
   vertical-align: top;
 }
 .vp-doc tr { background: transparent !important; border: none; }
-.vp-doc tr:last-child td { border-bottom: none; }
+.vp-doc th:last-child, .vp-doc td:last-child { padding-right: 0; }
 .vp-doc td code, .vp-doc th code { white-space: nowrap; }
+.vp-doc .table-wrap { overflow-x: auto; }
 
-/* Wide tables scroll inside their own ruling */
-.vp-doc .table-wrap, .vp-doc table { overflow-x: auto; }
-
-/* ─── Code blocks: exhibits ──────────────────────────────────────────────
- * Square corners, single hairline frame, a small-cap caption bar above
- * (EXHIBIT · {lang}), deposition-style line numbers every fifth line. */
+/* ─── Code blocks — dense, framed, wrapping ────────────────────────────── */
 
 .vp-doc div[class*="language-"] {
-  border: 1px solid var(--ledger-rule);
-  border-radius: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   background: var(--vp-code-block-bg);
-  margin: 1.6rem 0;
-  position: relative;
+  margin: 0.8rem 0;
+  box-shadow: none;
 }
 
-/* Caption bar */
-.vp-doc div[class*="language-"]::before {
-  content: "Exhibit";
-  display: block;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
-  padding: 0.42rem 1.1rem;
-  border-bottom: 1px solid var(--ledger-rule);
-  background: var(--vp-c-bg-alt);
-}
-
-/* Language badge joins the caption bar, right-aligned */
-.vp-doc div[class*="language-"] > .lang {
-  position: absolute;
-  top: 0.42rem;
-  right: 2.6rem;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.64rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-3);
-}
+/* The blocks are dense enough that a floating language tag lands on the first
+   line of code. The fence already says what the language is. */
+.vp-doc div[class*="language-"] > .lang { display: none; }
 
 .vp-doc div[class*="language-"] > button.copy {
-  top: 0.28rem;
-  right: 0.4rem;
-  height: 1.6rem;
-  width: 1.6rem;
-  border-radius: 2px;
-  background-size: 14px;
-  border: none;
+  top: 4px;
+  right: 4px;
+  height: 22px;
+  width: 22px;
+  border-radius: var(--radius);
+  background-color: var(--vp-code-block-bg);
+  background-size: 13px;
+  border: 1px solid var(--border);
 }
 
 .vp-doc div[class*="language-"] pre {
-  padding: 1rem 1.1rem;
+  padding: 0;
+  margin: 0;
   background: transparent;
+  overflow-x: hidden;
 }
 
-/* Wrap long lines: URIs and JSON must never force horizontal scroll */
+.vp-doc div[class*="language-"] pre code {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* Long URIs wrap instead of scrolling */
 .vp-doc div[class*="language-"] pre,
 .vp-doc div[class*="language-"] pre code,
 .vp-doc div[class*="language-"] pre code .line {
@@ -359,405 +357,148 @@ strong { font-weight: 600; }
   overflow-wrap: anywhere;
   tab-size: 2;
 }
-.vp-doc div[class*="language-"] pre { overflow-x: hidden; }
 
-/* Deposition line numbers: count every line, print every fifth */
-.vp-doc div[class*="language-"] pre code {
-  counter-reset: exhibit-line;
-  display: block;
-}
-.vp-doc div[class*="language-"] pre code .line {
-  counter-increment: exhibit-line;
-  position: relative;
-  display: block;
-  padding-left: 2.2rem;
-  min-height: 1.4em;
-}
-.vp-doc div[class*="language-"] pre code .line::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: 1.7rem;
-  text-align: right;
-  font-size: 0.66rem;
-  color: var(--vp-c-text-3);
-  user-select: none;
-}
-.vp-doc div[class*="language-"] pre code .line:nth-child(5n)::before {
-  content: counter(exhibit-line);
-}
+.vp-doc [class*="language-"] code .line { display: block; }
 
-/* Horizontal rules stay quiet — section weight belongs to the h2 double rule */
-.vp-doc hr {
-  border: none;
-  border-top: 1px solid var(--ledger-rule-soft);
-  margin: 2rem 0 0;
-}
-
-/* ─── Custom blocks (tips/warnings) as marginal rulings ─────────────────── */
+/* ─── Custom blocks ────────────────────────────────────────────────────── */
 
 .vp-doc .custom-block {
-  border-radius: 0;
-  border: none;
-  border-left: 2px solid var(--ledger-rule);
-  background: var(--vp-c-bg-alt);
-  font-size: 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left-width: 2px;
+  background: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  padding: 0.6rem 0.8rem;
+  margin: 0.9rem 0;
 }
-.vp-doc .custom-block.tip { border-left-color: var(--ledger-violet); }
-.vp-doc .custom-block.warning { border-left-color: var(--ledger-red); }
-.vp-doc .custom-block.danger { border-left-color: var(--ledger-red); background: var(--ledger-red-soft); }
+.vp-doc .custom-block p { margin: 0.3rem 0; }
+.vp-doc .custom-block.tip { border-left-color: var(--primary); }
+.vp-doc .custom-block.warning { border-left-color: var(--warn); }
+.vp-doc .custom-block.danger { border-left-color: var(--crit); }
 .vp-doc .custom-block-title {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  margin-bottom: 0.2rem;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
- * LEDGER COMPONENTS — the signature devices
- * ═══════════════════════════════════════════════════════════════════════ */
+/* ─── Mermaid — the only diagrams that stay ────────────────────────────── */
 
-/* ─── The docket line ────────────────────────────────────────────────────
- * Every cross-reference renders as a ruled ledger entry: a boxed scheme
- * tab, the URI in mono, a dotted leader running to a right-hand status
- * column. Nothing that references anything is ever a bare link. */
+.vp-doc .mermaid,
+.vp-doc [class*="mermaid"] svg {
+  max-width: 100%;
+  height: auto;
+}
+.vp-doc .mermaid { margin: 1rem 0; text-align: center; }
 
-.docket {
-  list-style: none;
-  margin: 1.2rem 0;
-  padding: 0;
-  border-top: 1px solid var(--ledger-rule);
-}
-.docket li, .docket-row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
-  padding: 0.52rem 0.1rem;
-  border-bottom: 1px solid var(--ledger-rule-soft);
-  margin: 0;
-}
-.docket .tab, .doc-tab {
-  flex: none;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.62rem;
+/* ─── Page primitives (used by the landing page and any doc page) ──────── */
+
+.eyebrow {
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  border: 1px solid var(--ledger-rule);
-  color: var(--vp-c-text-2);
-  padding: 0.08rem 0.4rem;
-  min-width: 2.6rem;
-  text-align: center;
   text-transform: uppercase;
-  align-self: center;
-}
-.docket .uri, .doc-uri {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.82rem;
-  color: var(--vp-c-text-1);
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.docket a.uri { text-decoration: none; color: var(--ledger-violet); }
-.docket a.uri:hover { text-decoration: underline; }
-.docket .leader {
-  flex: 1;
-  border-bottom: 1px dotted var(--ledger-rule);
-  transform: translateY(-0.32em);
-  min-width: 1.4rem;
-}
-.docket .col {
-  flex: none;
-  font-size: 0.78rem;
-  color: var(--vp-c-text-2);
-  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  margin: 0 0 0.4rem;
 }
 
-/* Typed-edge annotation: the relationship name set along the rule */
-.edge-label {
-  font-family: var(--vp-font-family-base);
-  font-style: italic;
-  font-size: 0.78rem;
-  color: var(--vp-c-text-2);
-  flex: none;
-}
-
-/* ─── The stamp ──────────────────────────────────────────────────────────
- * Currency, verified. Sealing red is reserved for stale/superseded —
- * its rarity is the signal. */
-
-.stamp {
-  display: inline-block;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--ledger-violet);
-  border: 1.5px solid var(--ledger-violet);
-  border-radius: 2px;
-  padding: 0.14rem 0.5rem;
-  transform: rotate(-1.4deg);
-  white-space: nowrap;
-}
-.stamp.stale, .stamp.superseded {
-  color: var(--ledger-red);
-  border-color: var(--ledger-red);
-  transform: rotate(-2.2deg);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
- * THE REGISTER — landing page
- * ═══════════════════════════════════════════════════════════════════════ */
-
-.register { max-width: 880px; margin: 0 auto; padding: 3.4rem 24px 4rem; }
-
-.register .eyebrow {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
+.vp-doc .page-sub {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+  max-width: 56ch;
   margin: 0 0 1rem;
 }
 
-.register h1.masthead {
-  font-family: var(--ledger-display);
-  font-weight: 800;
-  font-size: clamp(2.6rem, 6vw, 4.1rem);
-  line-height: 1.02;
-  letter-spacing: -0.015em;
-  margin: 0 0 1.1rem;
-  border: none;
-  padding: 0;
-}
+.vp-doc .page-head { margin-bottom: 1.4rem; }
 
-.register .standfirst {
-  font-size: 1.13rem;
-  line-height: 1.66;
-  max-width: 44rem;
-  color: var(--vp-c-text-1);
-  margin: 0 0 1.6rem;
+/* Hairline panel */
+.vp-doc .panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0.9rem 0;
 }
-.register .standfirst em { font-style: italic; }
-
-.register .actions { display: flex; gap: 0.8rem; flex-wrap: wrap; margin: 0 0 2.4rem; }
-.register .actions a {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-decoration: none;
-  padding: 0.62rem 1.15rem;
-  border-radius: 2px;
-  border: 1px solid var(--ledger-violet);
-}
-.register .actions a.primary { background: var(--ledger-violet); color: var(--ledger-paper); }
-.register .actions a.primary:hover { background: var(--ledger-violet-ink); border-color: var(--ledger-violet-ink); }
-.dark .register .actions a.primary { color: #17191C; }
-.register .actions a.quiet { border-color: var(--ledger-rule); color: var(--vp-c-text-1); }
-.register .actions a.quiet:hover { border-color: var(--ledger-violet); color: var(--ledger-violet); }
-
-/* Masthead stat row: a ledger header */
-.register .statrow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 3px double var(--ledger-rule);
-  border-bottom: 1px solid var(--ledger-rule);
-  margin: 0 0 2.8rem;
-}
-.register .statrow .cell {
-  padding: 0.85rem 1rem 0.9rem 0;
-  border-right: 1px solid var(--ledger-rule-soft);
-}
-.register .statrow .cell:last-child { border-right: none; }
-.register .statrow .cell:not(:first-child) { padding-left: 1rem; }
-.register .statrow .k {
-  font-family: var(--ledger-display);
-  font-weight: 700;
-  font-size: 1.5rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-.register .statrow .v {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
-  margin-top: 0.25rem;
-}
-
-/* Section heads inside the register */
-.register h2.rsec {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
-  border-top: 3px double var(--ledger-rule);
-  padding-top: 0.8rem;
-  margin: 2.6rem 0 1.1rem;
-}
-
-/* The statute excerpt: body of the record under examination */
-.register .statute {
-  border-left: 2px solid var(--ledger-rule);
-  padding: 0.35rem 0 0.35rem 1.35rem;
-  margin: 0 0 0.4rem;
-}
-.register .statute .cite {
-  font-family: var(--vp-font-family-mono);
+.vp-doc .panel-head {
   font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+.vp-doc .panel-body { padding: 0.6rem 0.7rem; font-size: 0.86rem; }
+.vp-doc .panel-body > :first-child { margin-top: 0; }
+.vp-doc .panel-body > :last-child { margin-bottom: 0; }
+
+/* Surface identity: a dot, never a filled block */
+.vp-doc .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  vertical-align: baseline;
+  margin-right: 0.35rem;
+}
+.vp-doc .dot.regulation { background: var(--surface-regulation); }
+.vp-doc .dot.test       { background: var(--surface-test); }
+.vp-doc .dot.check      { background: var(--surface-check); }
+.vp-doc .dot.commentary { background: var(--surface-commentary); }
+.vp-doc .dot.playbook   { background: var(--surface-playbook); }
+
+/* Status pill — hairline tag */
+.vp-doc .pill {
+  display: inline-block;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.66rem;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: var(--ledger-violet);
-  margin-bottom: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.02rem 0.32rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
 }
-.register .statute .body {
-  font-size: 1.04rem;
-  line-height: 1.68;
-  max-width: 42rem;
-}
-.register .statute .provenance {
-  margin-top: 0.55rem;
-  display: flex;
-  gap: 0.8rem;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 0.78rem;
-  color: var(--vp-c-text-2);
-}
+.vp-doc .pill-ok   { color: var(--ok);   border-color: color-mix(in oklch, var(--ok) 45%, transparent); }
+.vp-doc .pill-warn { color: var(--warn); border-color: color-mix(in oklch, var(--warn) 45%, transparent); }
+.vp-doc .pill-crit { color: var(--crit); border-color: color-mix(in oklch, var(--crit) 45%, transparent); }
+.vp-doc .pill-idle { color: var(--muted-foreground); }
 
-/* Two-column read-twice: chain + machine truth */
-.register .readtwice {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 2.2rem;
-  align-items: start;
-}
-@media (max-width: 760px) {
-  .register .readtwice { grid-template-columns: 1fr; }
-  .register .statrow { grid-template-columns: repeat(2, 1fr); }
-  .register .statrow .cell:nth-child(2) { border-right: none; }
-}
-
-/* Machine-truth exhibit on the landing (hand-built, not Shiki) */
-.register .exhibit {
-  border: 1px solid var(--ledger-rule);
-  background: var(--vp-code-block-bg);
-}
-.register .exhibit .cap {
+.vp-doc .uri {
   font-family: var(--vp-font-family-mono);
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
-  padding: 0.42rem 1rem;
-  border-bottom: 1px solid var(--ledger-rule);
-  background: var(--vp-c-bg-alt);
-  display: flex;
-  justify-content: space-between;
-}
-.register .exhibit pre {
-  margin: 0;
-  padding: 0.9rem 1rem;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.76rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--vp-c-text-1);
-}
-.register .exhibit .key { color: var(--ledger-violet); }
-
-/* Quickstart strip */
-.register .install {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  border-top: 1px solid var(--ledger-rule);
-  border-bottom: 1px solid var(--ledger-rule);
-}
-@media (max-width: 760px) { .register .install { grid-template-columns: 1fr; } }
-.register .install .step {
-  padding: 1rem 1.2rem 1.1rem 0;
-  border-right: 1px solid var(--ledger-rule-soft);
-}
-.register .install .step:last-child { border-right: none; }
-.register .install .step:not(:first-child) { padding-left: 1.2rem; }
-@media (max-width: 760px) {
-  .register .install .step { border-right: none; border-bottom: 1px solid var(--ledger-rule-soft); padding-left: 0; }
-  .register .install .step:last-child { border-bottom: none; }
-}
-.register .install .n {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--vp-c-text-2);
-  margin-bottom: 0.45rem;
-}
-.register .install code {
-  display: block;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.76rem;
-  color: var(--vp-c-text-1);
-  background: none;
-  padding: 0;
+  font-size: 0.82em;
   overflow-wrap: anywhere;
 }
 
-.register .foot {
-  margin-top: 2.6rem;
-  font-size: 0.84rem;
-  color: var(--vp-c-text-2);
-  max-width: 44rem;
-  line-height: 1.7;
+.vp-doc .stat-k {
+  font-size: 1.05rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
-
-/* ─── Inline SVG diagrams in markdown (kept from prior theme) ───────────── */
-
-.vp-doc .diagram {
-  margin: 1.5rem auto;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--vp-c-text-1);
-  contain: layout paint;
-}
-.vp-doc .diagram svg { display: block; width: 100%; height: auto; max-height: 480px; }
-.vp-doc .diagram svg text:not([class]) { visibility: hidden; }
-
-/* Legacy flow blocks (guide pages), restyled as register entries */
-.vp-doc .flow { margin: 1.4rem 0; border-top: 1px solid var(--ledger-rule); }
-.vp-doc .flow-step { border-bottom: 1px solid var(--ledger-rule-soft); padding: 0.7rem 0.2rem; }
-.vp-doc .flow-tag {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+.vp-doc .stat-v {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--vp-c-text-2);
-  margin-bottom: 0.25rem;
+  color: var(--muted-foreground);
 }
-.vp-doc .flow-body { font-size: 0.92rem; line-height: 1.6; }
-.vp-doc .flow-arrow { display: none; }
 
-/* ─── Mobile ────────────────────────────────────────────────────────────── */
+/* ─── Local search ─────────────────────────────────────────────────────── */
+
+.VPLocalSearchBox .shell,
+.VPLocalSearchBox .result { border-radius: var(--radius) !important; box-shadow: none !important; }
+
+/* ─── Mobile ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
   .VPDoc:not(.has-sidebar) .container,
   .VPDoc .content-container,
   .VPDoc .content {
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 20px;
+    padding-right: 20px;
   }
-  .vp-doc div[class*="language-"] pre { padding: 0.9rem 1rem; }
-  .register { padding-top: 2.2rem; }
+  .vp-doc h1 { font-size: 1.5rem; }
 }

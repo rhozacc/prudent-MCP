@@ -1,0 +1,66 @@
+name: Release MCPB bundle
+
+# Publishes the packaged server (.mcpb) as a downloadable release asset, so
+# "install prudent-mcp in Claude Desktop" is a download-and-double-click.
+# The dashboard's Connect page and the docs landing both link to
+# /releases/latest, so they resolve as soon as one release exists.
+#
+# Trigger by pushing a version tag (git tag v0.5.0 && git push origin v0.5.0)
+# or by running this workflow manually with a tag name.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.5.0). Created if it does not exist."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      # The bundle is only worth shipping if the server it packs is sound.
+      - run: bun run typecheck
+      - run: bun test
+
+      - name: Build the .mcpb bundle
+        run: bun run build:mcpb
+
+      - name: Resolve tag and asset name
+        id: meta
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          src="$(ls -1 *.mcpb dist/mcpb/*.mcpb 2>/dev/null | head -n1)"
+          if [[ -z "$src" ]]; then echo "no .mcpb produced by build:mcpb" >&2; exit 1; fi
+          asset="prudent-mcp-${tag}.mcpb"
+          cp "$src" "$asset"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          files: ${{ steps.meta.outputs.asset }}
+          body: |
+            **Claude Desktop:** download the `.mcpb` asset below and open it — Claude Desktop
+            installs the server, then set its one setting, the path to your `corpus.json`, and
+            restart.
+
+            **Claude Code:** `claude mcp add prudent --env CORPUS_FILE=/path/to/corpus.json -- bun run /path/to/prudent-mcp/src/mcpb-entry.ts`
+
+            The bundle ships with empty adapters: it serves whatever corpus you point
+            `CORPUS_FILE` at, and refuses to start on a corpus that fails validation.

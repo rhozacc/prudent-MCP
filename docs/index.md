@@ -1,135 +1,73 @@
 ---
-layout: page
 title: prudent-mcp
-titleTemplate: The evidence ledger for IRB model validation
+titleTemplate: Structured regulatory knowledge for IRB model validation
 sidebar: false
 aside: false
 ---
 
-<div class="register">
+<p class="eyebrow">MCP server · read-only knowledge layer</p>
 
-<p class="eyebrow">Register of regulatory knowledge · MCP server</p>
+# prudent-mcp
 
-<h1 class="masthead">prudent-mcp</h1>
-
-<p class="standfirst">
-A knowledge layer for IRB credit-risk model validation, served over MCP.
-Regulation, statistical tests, supervisor checks, review playbooks, and a
-currency registry of the documents behind them — <em>every claim typed,
-anchored, and traceable back to law</em>. Read-only by construction: the
-server describes; nothing executes, nothing mutates.
+<p class="page-sub">
+prudent-mcp serves a structured, typed knowledge base for IRB credit-risk model
+validation over the Model Context Protocol: regulation, statistical tests,
+supervisor checks, review playbooks, and a registry of the source documents the
+corpus derives from. It is read-only by construction — the server describes;
+nothing executes and nothing mutates.
 </p>
 
-<div class="actions">
-  <a class="primary" href="/prudent-mcp/guide/quickstart">Get started</a>
-  <a class="quiet" href="/prudent-mcp/tools/">Tool register</a>
-  <a class="quiet" href="https://github.com/rhozacc/prudent-mcp">Source · MIT</a>
-</div>
+## The five surfaces
 
-<div class="statrow" aria-label="Corpus surface summary">
-  <div class="cell"><div class="k">5</div><div class="v">Typed surfaces</div></div>
-  <div class="cell"><div class="k">19</div><div class="v">Tools</div></div>
-  <div class="cell"><div class="k">5</div><div class="v">URI schemes</div></div>
-  <div class="cell"><div class="k">0</div><div class="v">Write tools</div></div>
-</div>
-
-<h2 class="rsec">One record, in evidence</h2>
-
-<div class="readtwice">
-<div>
-
-<div class="statute">
-  <div class="cite">regulation://crr/180/1/a — CRR Article 180(1)(a)</div>
-  <div class="body">“Institutions shall estimate PDs by obligor grade from long-run averages of one-year default rates.”</div>
-  <div class="provenance">
-    <span class="stamp">Source · Verified · Current</span>
-    <span><code>source://crr/575-2013</code></span>
-  </div>
-</div>
-
-<ul class="docket" aria-label="Records that cite this article">
-  <li>
-    <span class="tab">chk</span>
-    <a class="uri" href="/prudent-mcp/tools/checks">check://calibration/pd/lra-derived</a>
-    <span class="leader"></span>
-    <span class="edge-label">derives from it</span>
-  </li>
-  <li>
-    <span class="tab">tst</span>
-    <a class="uri" href="/prudent-mcp/tools/tests">test://binomial</a>
-    <span class="leader"></span>
-    <span class="edge-label">verifies it</span>
-  </li>
-  <li>
-    <span class="tab">tst</span>
-    <a class="uri" href="/prudent-mcp/tools/tests">test://hosmer-lemeshow</a>
-    <span class="leader"></span>
-    <span class="edge-label">verifies it</span>
-  </li>
-  <li>
-    <span class="tab">pbk</span>
-    <a class="uri" href="/prudent-mcp/tools/playbooks">playbook://calibration/pd</a>
-    <span class="leader"></span>
-    <span class="edge-label">walks a review through it</span>
-  </li>
-</ul>
-
-</div>
-<div>
-
-<div class="exhibit">
-  <div class="cap"><span>Exhibit — the same record, machine truth</span><span>json</span></div>
-  <pre><span class="key">get_referrers</span>("regulation://crr/180/1/a")
-→ {
-  "checks":    ["check://calibration/pd/lra-derived"],
-  "tests":     ["test://binomial",
-                "test://hosmer-lemeshow",
-                "test://jeffreys"],
-  "playbooks": ["playbook://calibration/pd"],
-  "regulation": ["regulation://crr/180"]
-}</pre>
-</div>
-
-</div>
-</div>
-
-<h2 class="rsec">The five surfaces</h2>
-
-| | Surface | URI scheme | What an entry asserts |
+| | Surface | URI scheme | An entry asserts |
 |---|---|---|---|
-| <span class="tab doc-tab">reg</span> | **Regulation** | `regulation://{framework}/{article}…` | What the law says — versioned, `as_of`-queryable |
-| <span class="tab doc-tab">tst</span> | **Tests** | `test://{test-id}` | What a statistical test measures and when to trust it — described, never executed |
-| <span class="tab doc-tab">chk</span> | **Checks** | `check://{area}/{topic}…` | What a supervisor expects to see, traced to law via `derived_from` |
-| <span class="tab doc-tab">pbk</span> | **Playbooks** | `playbook://{area}…` | How to walk a review area, phase by phase |
-| <span class="tab doc-tab">src</span> | **Sources** | `source://{framework}/{doc-id}` | Whether the regulatory context is current — verification dates, supersession, milestones |
+| <span class="dot regulation"></span> | **Regulation** | `regulation://{framework}/{article}…` | What the law says — versioned, `as_of`-queryable |
+| <span class="dot test"></span> | **Tests** | `test://{test-id}` | What a statistical test measures and when to trust it — described, never executed |
+| <span class="dot check"></span> | **Checks** | `check://{area}/{topic}…` | What a supervisor expects to see, traced to law via `derived_from` |
+| <span class="dot playbook"></span> | **Playbooks** | `playbook://{area}…` | How to walk a review area, phase by phase |
+| <span class="dot commentary"></span> | **Sources** | `source://{framework}/{doc-id}` | Whether the regulatory context is current — verification dates, supersession, milestones |
 
-<h2 class="rsec">Enter into service</h2>
+19 tools sit on top: search and get per surface, list and get for the registry, and nine cross-cutting tools for traversal, reverse lookup, citation resolution, and coverage gaps. See the [tool reference](/tools/).
 
-<div class="install">
-  <div class="step">
-    <div class="n">01 · Clone &amp; install</div>
-    <code>git clone https://github.com/rhozacc/prudent-mcp && cd prudent-mcp && bun install</code>
-  </div>
-  <div class="step">
-    <div class="n">02 · Inspect the demo corpus</div>
-    <code>bun run inspect:demo</code>
-  </div>
-  <div class="step">
-    <div class="n">03 · Wire your client</div>
-    <code>claude mcp add prudent --env CORPUS_FILE=… -- bun run src/mcpb-entry.ts</code>
-  </div>
-</div>
+## Download
 
-<p class="foot">
-The open-source server ships with empty adapters and a seeded in-memory demo —
-the schemas, tools, and validation machinery are all here under MIT. A corpus is
-what you bring: point <code>CORPUS_FILE</code> at your own, or build adapters
-against any backend. Every corpus a server loads is linted on startup — broken
-cross-references, supersession cycles, and stale sources refuse to serve.
-See the <a href="/prudent-mcp/guide/">guide</a> for concepts, the
-<a href="/prudent-mcp/corpus/">corpus reference</a> for the record shapes, and
-<a href="/prudent-mcp/guide/clients">clients</a> for Claude Desktop, Claude Code,
-and API wiring.
-</p>
+**Claude Desktop** — download the packaged `.mcpb` bundle from the
+[latest release](https://github.com/rhozacc/prudent-mcp/releases/latest) and open
+it. Claude Desktop installs it as an extension; an install-time prompt sets the
+optional corpus file path. No toolchain required.
 
-</div>
+**Claude Code** — one line:
+
+```bash
+claude mcp add prudent --env CORPUS_FILE=/abs/path/corpus.json -- bun run /abs/path/prudent-mcp/src/mcpb-entry.ts
+```
+
+**From source** — clone, install, and inspect the seeded demo corpus:
+
+```bash
+git clone https://github.com/rhozacc/prudent-mcp && cd prudent-mcp
+bun install
+bun run inspect:demo
+```
+
+Other hosts and manual JSON config: [Client integrations](/guide/clients).
+
+## Where to go next
+
+| Section | What's there |
+|---|---|
+| [Guide](/guide/) | Introduction, domain concepts, quickstart, architecture, client wiring, FAQ |
+| [Tools](/tools/) | All 19 tools — arguments, return shapes, worked calls |
+| [Corpus structure](/corpus/) | URI schemes, record shapes, versioning, cross-reference rules |
+| [Schema reference](/corpus/schemas) | Generated field-level reference for all 11 schemas |
+| [Corpus graph](/corpus/graph) | How the surfaces reference each other |
+| [Examples](/examples/) | End-to-end sessions against the demo corpus |
+
+The open-source server ships with empty adapters and a seeded in-memory demo — the
+schemas, tools, and validation machinery are all here under
+[AGPL-3.0-only](https://github.com/rhozacc/prudent-mcp/blob/main/LICENSE), with a
+commercial licence available for embedding, OEM and on-prem. A corpus is
+what you bring: point `CORPUS_FILE` at your own, or write adapters against any
+backend. The corpus is data the server reads, not part of the program — your own
+stays yours. Every corpus is linted on startup, so broken cross-references,
+supersession cycles, and stale sources refuse to serve.

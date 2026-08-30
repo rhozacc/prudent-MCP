@@ -77,6 +77,15 @@ Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime 
 - URI schemes match surface names.
 - Cross-surface references are typed.
 - Strict TS (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Keep both on.
+- **Licensing is settled — don't drift it.** The server code is AGPL-3.0-only
+  (`LICENSE`, `package.json`, `manifest.json`, `README.md` and `docs/index.md` must
+  all agree). The corpus is proprietary, licensed separately, and never enters this
+  repo. Embedding/OEM/on-prem is offered under a commercial licence instead. The
+  copyleft is deliberate: the server ships only a stdio transport, so any hosted
+  deployment is a modified work and §13 reaches its transport, auth and metering
+  layer — that is the asset being protected, not the corpus, which no code licence
+  can reach. Anything bundled into the `.mcpb` needs its notice in
+  `THIRD-PARTY-NOTICES.md`.
 
 ## Don't add (yet)
 
