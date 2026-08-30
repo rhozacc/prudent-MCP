@@ -1,12 +1,12 @@
 # Tools overview
 
-19 tools across six files. Every tool has a description, a zod input schema, and a handler that delegates to the adapter layer.
+19 tools across six files. Every tool has a title, a description, read-only annotations, a zod input schema, and a handler that delegates to the adapter layer.
 
 ## All tools
 
 | Tool | Surface | Description |
 |---|---|---|
-| `get_corpus_info` | meta | What's loaded — counts and coverage |
+| `get_corpus_info` | meta | What's loaded — counts, coverage, stale sources |
 | `get_referrers` | meta | Everything that references a given ID |
 | `resolve_citation` | meta | Loose prose citation → structured Regulation |
 | `list_review_areas` | meta | Canonical taxonomy of review areas |
@@ -15,18 +15,27 @@
 | `expand_regulation` | meta | Regulation with its children (sub-regs + checks/tests) resolved inline |
 | `get_regulation_tree` | meta | Recursive dossier: a branch of law with operationalizing checks/tests |
 | `get_coverage_gaps` | meta | Regulations with no check/test coverage — the aggregate inverse of get_referrers |
-| `search_regulation` | regulation | Full-text search across all loaded regulatory frameworks |
+| `search_regulation` | regulation | Ranked search over citation, text, and commentary |
 | `get_regulation` | regulation | Fetch a regulation paragraph by URI, with optional `as_of` |
-| `search_tests` | tests | Full-text search across the statistical test catalog |
+| `search_tests` | tests | Ranked search over test name, aliases, family, purpose, criteria |
 | `get_test` | tests | Fetch a test by ID |
-| `search_checks` | checks | Full-text search across the qualitative check catalog |
+| `search_checks` | checks | Ranked search over check name, expectation, expected evidence |
 | `get_check` | checks | Fetch a check by ID |
-| `search_playbooks` | playbooks | Full-text search across the playbook catalog |
+| `search_playbooks` | playbooks | Ranked search over area, subarea, phase names and descriptions |
 | `get_playbook` | playbooks | Fetch a playbook by ID |
 | `list_sources` | sources | The source-document registry with currency status, optionally filtered |
 | `get_source` | sources | Fetch a source document record by ID |
 
 `list_sources` is deliberately a list, not a search: the registry is small and status-filterable, so enumerating beats matching.
+
+## Conventions every tool follows
+
+- **Annotations** — every tool declares `readOnlyHint: true`, `idempotentHint: true`, `openWorldHint: false`. The whole server reads a local knowledge base and nothing else.
+- **Structured output** — tools with an output schema return `structuredContent` plus a JSON text fallback (the spec requires text alongside structured content).
+- **Misses are `isError`** — an unknown id or slug comes back as an `isError` result with a pointer to the right search/list tool, never the literal string `"null"`. Resource reads miss with JSON-RPC error `-32002`.
+- **The search envelope** — the four `search_*` tools share `{ results, total_matches, offset, truncated }` with `limit` (default 20, max 100) and `offset` paging, and a text hint when truncated. Queries are ranked and field-scoped, minimum 2 characters — search never enumerates the corpus; that's what `list_*` tools and traversal are for. Note the built-in adapters cap ranked matches at 20, so `total_matches` tops out there.
+- **`detail: "concise" | "full"`** — search and traversal tools are concise by default (per-surface projections, `{ type, id, label }` reference stubs); pass `detail: "full"` for complete records.
+- **Lenient ids** — id parameters tolerate surrounding whitespace, quotes, brackets, and trailing punctuation.
 
 ## URI scheme quick-reference
 

@@ -198,7 +198,7 @@ describe("seed corpus consistency", () => {
   });
 
   it("every check/test child mirrors its parent regulation (parent + derived_from/regulatory_basis)", async () => {
-    const regulations = await adapters.regulation.search("");
+    const regulations = await adapters.regulation.list();
     expect(regulations.length).toBeGreaterThan(0);
 
     let mirroredPairs = 0;
@@ -231,7 +231,7 @@ describe("seed corpus consistency", () => {
   });
 
   it("every regulation child resolves and points back via parent", async () => {
-    const regulations = await adapters.regulation.search("");
+    const regulations = await adapters.regulation.list();
     const byId = new Map(regulations.map((r) => [r.id, r]));
 
     for (const reg of regulations) {

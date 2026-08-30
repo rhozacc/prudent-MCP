@@ -8,20 +8,22 @@ Checks are qualitative expectations with a concrete pass/fail bar, traced back t
 
 ## `search_checks`
 
-Full-text search across the catalog of qualitative checks.
+Ranked, field-scoped search across the catalog of qualitative checks: name (weight 3), expectation (2), expected evidence (1).
 
 **Inputs:**
 
 | Parameter | Type | Notes |
 |---|---|---|
-| `query` | `string` | Matches against name, expectation, and derived_from |
+| `query` | `string` | Minimum 2 characters |
+| `limit` / `offset` | `number` | Optional paging (default 20 per page) |
+| `detail` | `"concise" \| "full"` | Optional, default `"concise"` |
 
-**Returns:** `Check[]` — includes `id`, `name`, `derived_from`, `expectation`, and `expected_evidence`.
+**Returns:** the shared envelope `{ results, total_matches, offset, truncated }`. Concise results are `{ id, name, expectation_first_sentence, derived_from }`; `detail: "full"` serves complete records.
 
 **Example:**
 ```ts
 search_checks("long-run average")
-→ [{ id: "check://calibration/pd/lra-derived", name: "PD long-run average derived from sufficient history", ... }]
+→ { results: [{ id: "check://calibration/pd/lra-derived", name: "PD long-run average derived from sufficient history", expectation_first_sentence: "PD long-run average is computed over a period containing at least one full economic cycle…", derived_from: ["regulation://crr/180/1/a", "regulation://eba/gl-2017-16/78"] }], total_matches: 1, offset: 0, truncated: false }
 ```
 
 Use `get_regulation` on any `derived_from` id to read the underlying law.
@@ -38,7 +40,7 @@ Fetch a check by ID.
 |---|---|---|
 | `id` | `CheckId` | e.g. `check://calibration/pd/lra-derived` |
 
-**Returns:** `Check | null`
+**Returns:** `Check` — unknown ids are an `isError` result pointing at `search_checks`.
 
 ```ts
 type Check = {

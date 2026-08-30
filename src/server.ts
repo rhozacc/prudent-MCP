@@ -27,10 +27,18 @@ export function createServer(): McpServer {
     },
     {
       instructions:
-        "IRB credit risk model validation knowledge layer. " +
-        "Five surfaces: regulation, tests, checks, playbooks, sources — each with its own URI scheme. " +
-        "Sources are the registry of documents the corpus derives from, with currency status. " +
-        "Read-only. Latest content by default; pass as_of on regulation tools for historical lookups.",
+        "IRB credit-risk model validation knowledge layer — read-only; the server describes, computation happens elsewhere.\n" +
+        "Five surfaces with matching URI schemes: regulation:// test:// check:// playbook:// source://.\n" +
+        "Entry path: get_corpus_info → list_review_areas → get_area_overview(area) for the one-shot bundle of a review area.\n" +
+        "Traversal: expand_playbook / expand_regulation (references resolved inline), get_regulation_tree (dossier walk, " +
+        "200-node cap), get_referrers (the reverse index), get_coverage_gaps (its aggregate inverse).\n" +
+        "Conventions: search_* and traversal tools are concise by default — pass detail: 'full' for complete records; " +
+        "search_* return { results, total_matches, offset, truncated }.\n" +
+        "Misses come back as isError results pointing at the right search/list tool — never a bare 'null'.\n" +
+        "Regulation is the only versioned surface: pass as_of (ISO date) for the text in force on that date; backends " +
+        "without history serve current text, and an as_of predating all recorded versions is a miss.\n" +
+        "Sources are the currency registry (verified dates, supersession, milestones); they join regulation via " +
+        "framework + document_id, never by URI reference.",
     },
   );
 

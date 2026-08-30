@@ -27,10 +27,10 @@ async function main(): Promise<void> {
   await wireCorpus();
 
   const [regs, checks, tests, playbooks, sources] = await Promise.all([
-    adapters.regulation.search(""),
-    adapters.check.search(""),
-    adapters.test.search(""),
-    adapters.playbook.search(""),
+    adapters.regulation.list(),
+    adapters.check.list(),
+    adapters.test.list(),
+    adapters.playbook.list(),
     adapters.source.list(),
   ]);
 

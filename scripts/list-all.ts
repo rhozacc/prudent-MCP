@@ -36,7 +36,7 @@ async function main() {
 
   // ── Regulations ───────────────────────────────────────────────────────────
   console.log(H1("REGULATIONS"));
-  const regs = await adapters.regulation.search("");
+  const regs = await adapters.regulation.list();
   for (const r of regs) {
     console.log(H2(`${r.citation}  [${r.id}]`));
     console.log(`  framework: ${r.framework}  |  version: ${r.document_version}`);
@@ -53,7 +53,7 @@ async function main() {
 
   // ── Tests ─────────────────────────────────────────────────────────────────
   console.log(H1("TESTS"));
-  const tests = await adapters.test.search("");
+  const tests = await adapters.test.list();
   for (const t of tests) {
     console.log(H2(`${t.name}  [${t.id}]`));
     console.log(`  family: ${t.family}`);
@@ -65,7 +65,7 @@ async function main() {
 
   // ── Checks ────────────────────────────────────────────────────────────────
   console.log(H1("CHECKS"));
-  const checks = await adapters.check.search("");
+  const checks = await adapters.check.list();
   for (const c of checks) {
     console.log(H2(`${c.name}  [${c.id}]`));
     console.log(`  derived_from: ${c.derived_from.join(", ")}`);
@@ -79,7 +79,7 @@ async function main() {
 
   // ── Playbooks ─────────────────────────────────────────────────────────────
   console.log(H1("PLAYBOOKS"));
-  const playbooks = await adapters.playbook.search("");
+  const playbooks = await adapters.playbook.list();
   for (const p of playbooks) {
     const label = p.subarea ? `${p.area} / ${p.subarea}` : p.area;
     console.log(H2(`${label}  [${p.id}]`));

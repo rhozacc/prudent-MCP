@@ -109,6 +109,33 @@ A `Regulation` is identified by its `id` plus the source document's `document_ve
 
 What this means for an adapter: when an amended regulation is ingested, the old record isn't replaced — a new version is added alongside, with its own `effective_from`. The corpus stores the full history per regulation ID.
 
+### `regulation_history` — the corpus file key
+
+In the file-adapter format, history lives under the optional top-level `regulation_history` key: an array of `{ id, effective_from, record }` entries, where `record` is a complete `Regulation` and `effective_from` is the ISO date that version entered into force. Entries are past versions; a corpus that wants the **current** version selectable under `as_of` includes one entry whose `record` is the current text with its effective boundary (the in-memory demo follows the same convention). Order in the file doesn't matter — the adapter sorts per id.
+
+```json
+{
+  "regulation": [ { "id": "regulation://crr/178/1/b", "document_version": "2024-01-09", ... } ],
+  "regulation_history": [
+    { "id": "regulation://crr/178/1/b", "effective_from": "2014-01-01",
+      "record": { "id": "regulation://crr/178/1/b", "document_version": "2013-06-26", ... } },
+    { "id": "regulation://crr/178/1/b", "effective_from": "2021-06-28",
+      "record": { "id": "regulation://crr/178/1/b", "document_version": "2024-01-09", ... } }
+  ]
+}
+```
+
+### The `as_of` resolution rule
+
+`get(id, asOf)` resolves deterministically, and backends must never serve current text as historical:
+
+| Situation | Result |
+|---|---|
+| no `as_of` | the current record (or `null` if the id is unknown) |
+| `as_of`, no history for the id | the current record — the only version the corpus knows; corpora without `regulation_history` behave exactly as before |
+| `as_of`, history present | the last entry with `effective_from <= as_of` (boundary dates inclusive) |
+| `as_of` predates every entry | `null` — the tool layer explains the rule in its miss message |
+
 ---
 
 ## Regulation

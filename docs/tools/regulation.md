@@ -8,23 +8,29 @@ Regulation is the only versioned surface — records carry a `document_version`,
 
 ## `search_regulation`
 
-Full-text search across all loaded regulatory frameworks.
+Ranked, field-scoped search across all loaded regulatory frameworks: citation (weight 3), text (2), commentary (1). Record ids join the field set only when the query itself looks URI-like — a prose query never matches through the `regulation://` scheme.
 
 **Inputs:**
 
 | Parameter | Type | Notes |
 |---|---|---|
-| `query` | `string` | Free-text — matches against citation, text, and commentary |
+| `query` | `string` | Minimum 2 characters — search never enumerates the corpus |
+| `limit` | `number` | Optional page size, default 20, max 100 |
+| `offset` | `number` | Optional — skip this many ranked matches |
+| `detail` | `"concise" \| "full"` | Optional, default `"concise"` |
 
-**Returns:** `Regulation[]` — latest versions only.
+**Returns:** the shared envelope `{ results, total_matches, offset, truncated }` — latest versions only. Concise results are `{ id, citation, matched_excerpt, document_id, parent }`, where `matched_excerpt` is a ~120-char window around the best match; `detail: "full"` serves complete records.
 
 **Example:**
 ```ts
 search_regulation("long-run average")
-→ [
-    { id: "regulation://crr/180/1/a",       citation: "CRR Article 180(1)(a)", ... },
-    { id: "regulation://eba/gl-2017-16/78", citation: "EBA GL 2017/16 para 78", ... }
-  ]
+→ {
+    results: [
+      { id: "regulation://crr/180/1/a",       citation: "CRR Article 180(1)(a)", matched_excerpt: "…from long-run averages of one-year default rates…", ... },
+      { id: "regulation://eba/gl-2017-16/78", citation: "EBA GL 2017/16 paragraph 78", ... }
+    ],
+    total_matches: 2, offset: 0, truncated: false
+  }
 ```
 
 Use `get_referrers` on any returned id to find the checks and playbooks that operationalise it. Use `get_regulation` with `as_of` for historical versions.
@@ -42,7 +48,9 @@ Fetch a regulation paragraph by URI.
 | `id` | `RegulationId` | yes | e.g. `regulation://crr/178/1/a` |
 | `as_of` | `string` (ISO date) | no | Returns the version in force on this date |
 
-**Returns:** `Regulation | null`
+**Returns:** `Regulation` — unknown ids are an `isError` result pointing at `search_regulation`.
+
+The `as_of` rule (see [Corpus structure → Versioning](../corpus/#versioning)): with no history for the id, the backend serves the only version it knows — the current one; with history, the version in force on the date is returned, and an `as_of` predating every recorded version is a miss explaining the rule — never current text masquerading as historical.
 
 ```ts
 type Regulation = {

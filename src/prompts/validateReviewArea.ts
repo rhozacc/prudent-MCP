@@ -4,19 +4,36 @@
  * These return short scaffolds that orient the model around the corpus's
  * structure. Bodies are intentionally minimal so the host LLM does the
  * thinking; richer prompt content can be added without changing names or
- * argument shapes.
+ * argument shapes. Arguments carry completion callbacks (completable) so
+ * clients can offer live suggestions — areas come from the connected
+ * taxonomy, the rest from fixed enums.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
+
+import { adapters } from "../adapters.ts";
+
+const COMPONENTS = ["pd", "lgd", "ead"] as const;
+const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
 export function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     "validate_review_area",
     {
+      title: "Validate review area",
       description:
         "Guided walkthrough for validating a review area. Orients the model " +
         "around the relevant playbook, checks, and regulations.",
-      argsSchema: { area: z.string() },
+      argsSchema: {
+        area: completable(
+          z.string().describe("Canonical review-area slug, e.g. 'calibration.pd'"),
+          async (value) => {
+            const areas = await adapters.meta.taxonomy();
+            return areas.map((a) => a.id).filter((id) => id.startsWith(value)).slice(0, 50);
+          },
+        ),
+      },
     },
     ({ area }) => ({
       messages: [
@@ -40,9 +57,15 @@ export function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     "review_calibration",
     {
+      title: "Review calibration",
       description:
         "Calibration-specific review walkthrough (PD / LGD / EAD).",
-      argsSchema: { component: z.string() },
+      argsSchema: {
+        component: completable(
+          z.enum(COMPONENTS).describe("Model component under review"),
+          (value) => COMPONENTS.filter((c) => c.startsWith(String(value).toLowerCase())),
+        ),
+      },
     },
     ({ component }) => ({
       messages: [
@@ -66,9 +89,15 @@ export function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     "assess_findings",
     {
+      title: "Assess findings",
       description:
         "Walk a set of findings against regulatory expectations.",
-      argsSchema: { severity: z.string().optional() },
+      argsSchema: {
+        severity: completable(
+          z.enum(SEVERITIES).optional().describe("Only assess findings at this severity"),
+          (value) => SEVERITIES.filter((s) => s.startsWith(String(value ?? "").toLowerCase())),
+        ),
+      },
     },
     ({ severity }) => ({
       messages: [

@@ -21,6 +21,15 @@ import type {
   SourceAdapter,
   TestAdapter,
 } from "../src/adapters.ts";
+import { resolveCitationIn } from "../src/file-adapter.ts";
+import { computeReferrers } from "../src/referrers.ts";
+import {
+  checkSearchFields,
+  playbookSearchFields,
+  rankedSearch,
+  regulationSearchFields,
+  testSearchFields,
+} from "../src/search.ts";
 import type {
   Check,
   CheckId,
@@ -446,14 +455,11 @@ const SOURCES: Record<SourceId, Source> = {
 // Adapter implementations
 // ============================================================================
 
-const matches = (q: string, ...fields: Array<string | undefined>): boolean => {
-  const needle = q.toLowerCase().trim();
-  return fields.some((f) => (f ?? "").toLowerCase().includes(needle));
-};
-
 const inMemoryRegulation: RegulationAdapter = {
   async search(query) {
-    return Object.values(REGULATIONS).filter((r) => matches(query, r.text, r.citation));
+    return rankedSearch(Object.values(REGULATIONS), query, regulationSearchFields(query)).map(
+      (m) => m.record,
+    );
   },
   async get(id, asOf) {
     if (asOf && HISTORICAL_REGULATIONS[id]) {
@@ -466,34 +472,44 @@ const inMemoryRegulation: RegulationAdapter = {
     }
     return REGULATIONS[id] ?? null;
   },
+  async list() {
+    return Object.values(REGULATIONS);
+  },
 };
 
 const inMemoryTest: TestAdapter = {
   async search(query) {
-    return Object.values(TESTS).filter((t) =>
-      matches(query, t.name, t.purpose, t.family, ...t.aliases),
-    );
+    return rankedSearch(Object.values(TESTS), query, testSearchFields).map((m) => m.record);
   },
   async get(id) {
     return TESTS[id] ?? null;
+  },
+  async list() {
+    return Object.values(TESTS);
   },
 };
 
 const inMemoryCheck: CheckAdapter = {
   async search(query) {
-    return Object.values(CHECKS).filter((c) => matches(query, c.name, c.expectation));
+    return rankedSearch(Object.values(CHECKS), query, checkSearchFields).map((m) => m.record);
   },
   async get(id) {
     return CHECKS[id] ?? null;
+  },
+  async list() {
+    return Object.values(CHECKS);
   },
 };
 
 const inMemoryPlaybook: PlaybookAdapter = {
   async search(query) {
-    return Object.values(PLAYBOOKS).filter((p) => matches(query, p.area, p.subarea));
+    return rankedSearch(Object.values(PLAYBOOKS), query, playbookSearchFields).map((m) => m.record);
   },
   async get(id) {
     return PLAYBOOKS[id] ?? null;
+  },
+  async list() {
+    return Object.values(PLAYBOOKS);
   },
 };
 
@@ -524,23 +540,20 @@ const inMemoryMeta: MetaAdapter = {
     };
   },
   async referrers(id) {
-    const checks = Object.values(CHECKS)
-      .filter((c) => c.derived_from.includes(id as RegulationId))
-      .map((c) => c.id);
-    const playbooks = Object.values(PLAYBOOKS)
-      .filter((p) => p.phases.some((ph) => ph.references.includes(id as RegulationId | TestId | CheckId | PlaybookId)))
-      .map((p) => p.id);
-    return { regulation: [], tests: [], checks, playbooks };
+    return computeReferrers(
+      {
+        regulation: Object.values(REGULATIONS),
+        tests: Object.values(TESTS),
+        checks: Object.values(CHECKS),
+        playbooks: Object.values(PLAYBOOKS),
+      },
+      id,
+    );
   },
   async resolveCitation(text) {
-    const t = text.toLowerCase().replace(/\s/g, "");
-    if (t.includes("178") && t.includes("(1)(a)")) return REGULATIONS["regulation://crr/178/1/a"]!;
-    if (t.includes("178") && t.includes("(1)(b)")) return REGULATIONS["regulation://crr/178/1/b"]!;
-    if (t.includes("180") && t.includes("(1)(a)")) return REGULATIONS["regulation://crr/180/1/a"]!;
-    if (t.includes("180") && t.includes("crr")) return REGULATIONS["regulation://crr/180"]!;
-    if ((t.includes("eba") || t.includes("gl")) && t.includes("78"))
-      return REGULATIONS["regulation://eba/gl-2017-16/78"]!;
-    return null;
+    // Same deterministic matcher as the file adapter — the demo must resolve
+    // exactly what the resolve_citation tool description promises.
+    return resolveCitationIn(Object.values(REGULATIONS), text);
   },
   async taxonomy() {
     return [...REVIEW_AREAS];

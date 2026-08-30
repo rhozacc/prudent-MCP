@@ -22,14 +22,37 @@ describe("server registration", () => {
     expect(Object.keys(s._registeredPrompts).length).toBe(3);
   });
 
-  it("get_referrers on regulation://crr/180/1/a returns checks and playbooks that reference it", async () => {
+  it("get_referrers on regulation://crr/180/1/a returns the full reverse index", async () => {
     // Wire the in-memory adapters (side effects in the demo module do the assignment).
     await import("../examples/inmemory-demo.ts");
     const result = await adapters.meta.referrers("regulation://crr/180/1/a");
     expect(result.checks).toEqual(["check://calibration/pd/lra-derived"]);
+    // The playbook refers via a phase reference — the scan covers phases, not
+    // just regulatory_scope.
     expect(result.playbooks).toEqual(["playbook://calibration/pd"]);
-    expect(result.regulation).toEqual([]);
-    expect(result.tests).toEqual([]);
+    // The parent article lists it in children — a structural referrer.
+    expect(result.regulation).toEqual(["regulation://crr/180"]);
+    // All three calibration tests name it in regulatory_basis (order-insensitive).
+    expect([...result.tests].sort()).toEqual(
+      ["test://binomial", "test://hosmer-lemeshow", "test://jeffreys"],
+    );
+  });
+
+  it("every registered tool declares read-only annotations and a title", () => {
+    const server = createServer();
+    const s = server as unknown as {
+      _registeredTools: Record<
+        string,
+        { title?: string; annotations?: { readOnlyHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } }
+      >;
+    };
+    for (const [name, tool] of Object.entries(s._registeredTools)) {
+      expect(tool.annotations?.readOnlyHint, `${name} must declare readOnlyHint`).toBe(true);
+      expect(tool.annotations?.idempotentHint, `${name} must declare idempotentHint`).toBe(true);
+      expect(tool.annotations?.openWorldHint, `${name} must declare openWorldHint: false`).toBe(false);
+      expect(typeof tool.title, `${name} must carry a title`).toBe("string");
+      expect((tool.title ?? "").length, `${name} title must be non-empty`).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -76,7 +99,7 @@ describe("traversal tools", () => {
     expect(areaNode).toBeDefined();
     expect(areaNode!.id).toBe("calibration.pd");
 
-    const allPlaybooks = await adapters.playbook.search("");
+    const allPlaybooks = await adapters.playbook.list();
     const areaPlaybooks = allPlaybooks.filter(
       (p) => p.area === area || (p.subarea !== undefined && `${p.area}.${p.subarea}` === area),
     );
@@ -186,9 +209,9 @@ describe("traversal tools", () => {
   });
 
   it("get_coverage_gaps flags the uncovered section but not a covered leaf", async () => {
-    const regs = await adapters.regulation.search("");
-    const checks = await adapters.check.search("");
-    const tests = await adapters.test.search("");
+    const regs = await adapters.regulation.list();
+    const checks = await adapters.check.list();
+    const tests = await adapters.test.list();
     const report = computeCoverageGaps(regs, checks, tests);
 
     const uncoveredIds = report.uncovered.map((u) => u.id);
@@ -247,5 +270,103 @@ describe("sources surface", () => {
     // Exactly the deliberately-stale current seed; the superseded seed with an
     // equally old verified date must stay out.
     expect(info.stale_sources).toEqual(["source://eba/gl-2017-16"]);
+  });
+});
+
+// ── Wire-level contracts — a real MCP client over a linked in-memory pair ─────
+//
+// The blocks above call adapters and exported helpers directly; this one runs
+// the actual protocol so the tool-result conventions (annotations on the wire,
+// the search envelope with structuredContent, isError misses, -32002 resource
+// misses, completions) can't silently drift from what a client sees.
+
+describe("MCP wire contracts (in-memory transport)", () => {
+  let client: import("@modelcontextprotocol/sdk/client/index.js").Client;
+
+  beforeAll(async () => {
+    const { demoServer } = await import("../examples/inmemory-demo.ts");
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await demoServer.connect(serverTransport);
+    client = new Client({ name: "smoke-test", version: "0.0.0" });
+    await client.connect(clientTransport);
+  });
+
+  it("tools/list serves 19 tools, each annotated read-only and titled; search tools carry outputSchema", async () => {
+    const { tools } = await client.listTools();
+    expect(tools.length).toBe(19);
+    for (const t of tools) {
+      expect(t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe(true);
+      expect(t.annotations?.idempotentHint, `${t.name} idempotentHint`).toBe(true);
+      expect(t.annotations?.openWorldHint, `${t.name} openWorldHint`).toBe(false);
+      expect(t.title, `${t.name} title`).toBeTruthy();
+    }
+    const searchTools = tools.filter((t) => t.name.startsWith("search_"));
+    expect(searchTools.length).toBe(4);
+    for (const t of searchTools) expect(t.outputSchema, `${t.name} outputSchema`).toBeDefined();
+  });
+
+  it("search_* returns the { results, total_matches, offset, truncated } envelope as structuredContent", async () => {
+    const res = await client.callTool({ name: "search_checks", arguments: { query: "long-run average" } });
+    expect(res.isError).not.toBe(true);
+    const env = res.structuredContent as {
+      results: Array<Record<string, unknown>>;
+      total_matches: number;
+      offset: number;
+      truncated: boolean;
+    };
+    expect(Array.isArray(env.results)).toBe(true);
+    expect(typeof env.total_matches).toBe("number");
+    expect(env.offset).toBe(0);
+    expect(typeof env.truncated).toBe("boolean");
+    // Ranked: the check that names the phrase outranks incidental matches.
+    expect(env.results[0]?.["id"]).toBe("check://calibration/pd/lra-derived");
+    // Concise projection by default — first sentence, not the full expectation.
+    expect(typeof env.results[0]?.["expectation_first_sentence"]).toBe("string");
+    expect("expectation" in (env.results[0] ?? {})).toBe(false);
+    // The spec requires a text block alongside structured content; it mirrors the envelope.
+    const text = (res.content as Array<{ type: string; text: string }>)[0];
+    expect(text?.type).toBe("text");
+    expect(JSON.parse(text!.text).total_matches).toBe(env.total_matches);
+  });
+
+  it("search_* pages within the ranked set and flags truncation", async () => {
+    const res = await client.callTool({
+      name: "search_checks",
+      arguments: { query: "definition", detail: "full", limit: 1 },
+    });
+    const env = res.structuredContent as { results: Array<{ expectation?: string }>; truncated: boolean };
+    expect(env.results).toHaveLength(1);
+    expect(env.results[0]?.expectation).toBeDefined(); // detail: "full" serves complete records
+    expect(env.truncated).toBe(true);
+    expect((res.content as unknown[]).length).toBe(2); // envelope + truncation hint
+  });
+
+  it("get_* misses are isError results with a next-step pointer — never the string 'null'", async () => {
+    const res = await client.callTool({ name: "get_check", arguments: { id: "check://nope/nope" } });
+    expect(res.isError).toBe(true);
+    const text = (res.content as Array<{ text: string }>)[0]?.text ?? "";
+    expect(text).toContain("search_checks");
+    expect(text).not.toBe("null");
+  });
+
+  it("resource misses surface as JSON-RPC -32002, hits read as JSON", async () => {
+    expect(client.readResource({ uri: "check://nope/nope" })).rejects.toMatchObject({ code: -32002 });
+    const hit = await client.readResource({ uri: "test://jeffreys" });
+    expect(JSON.parse((hit.contents[0] as { text: string }).text).name).toBe("Jeffreys test");
+  });
+
+  it("resource templates and prompt arguments offer completions", async () => {
+    const rc = await client.complete({
+      ref: { type: "ref/resource", uri: "check://{+path}" },
+      argument: { name: "path", value: "calibration" },
+    });
+    expect(rc.completion.values).toContain("calibration/pd/lra-derived");
+    const pc = await client.complete({
+      ref: { type: "ref/prompt", name: "validate_review_area" },
+      argument: { name: "area", value: "cali" },
+    });
+    expect(pc.completion.values).toContain("calibration.pd");
   });
 });
