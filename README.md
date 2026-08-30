@@ -70,6 +70,12 @@ The curated **prudent corpus** — the full body of regulation, tests, checks, p
 
 [Bun](https://bun.sh) · TypeScript strict · [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) · [zod](https://zod.dev) · template-literal URI types for compile-time surface segregation
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) — development setup, the checks CI runs, the two
+boundaries that are not negotiable (no corpus in this repo, no write path in the server),
+and the CLA.
+
 ## License
 
 [AGPL-3.0-only](./LICENSE) — the server code, and only the server code.
