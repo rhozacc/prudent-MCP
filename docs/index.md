@@ -64,8 +64,10 @@ Other hosts and manual JSON config: [Client integrations](/guide/clients).
 | [Examples](/examples/) | End-to-end sessions against the demo corpus |
 
 The open-source server ships with empty adapters and a seeded in-memory demo — the
-schemas, tools, and validation machinery are all here under the licence in
-[LICENSE](https://github.com/rhozacc/prudent-mcp/blob/main/LICENSE) (AGPL-3.0). A corpus is
+schemas, tools, and validation machinery are all here under
+[AGPL-3.0-only](https://github.com/rhozacc/prudent-mcp/blob/main/LICENSE), with a
+commercial licence available for embedding, OEM and on-prem. A corpus is
 what you bring: point `CORPUS_FILE` at your own, or write adapters against any
-backend. Every corpus is linted on startup, so broken cross-references,
+backend. The corpus is data the server reads, not part of the program — your own
+stays yours. Every corpus is linted on startup, so broken cross-references,
 supersession cycles, and stale sources refuse to serve.

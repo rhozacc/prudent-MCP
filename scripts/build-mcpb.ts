@@ -25,10 +25,21 @@ await build({
   target: "node18",
   // zod and @modelcontextprotocol/sdk are pure-JS — bundle them in.
   // node:* built-ins are automatically externalized by esbuild.
+  //
+  // Bundling statically links two MIT dependencies into this file, and MIT
+  // requires their notices to travel with the copy. Neither ships a legal banner
+  // comment today, so this preserves nothing right now — THIRD-PARTY-NOTICES.md
+  // below is what actually discharges the obligation. Set anyway, so a future
+  // dependency that does carry one keeps it instead of having it stripped.
+  legalComments: "eof",
 });
 
 copyFileSync("manifest.json", join(OUT_DIR, "manifest.json"));
 copyFileSync("prudent-logo.png", join(OUT_DIR, "icon.png"));
+// The bundle is a redistribution, so it carries its own licence terms and the
+// notices for what is linked into it.
+copyFileSync("LICENSE", join(OUT_DIR, "LICENSE"));
+copyFileSync("THIRD-PARTY-NOTICES.md", join(OUT_DIR, "THIRD-PARTY-NOTICES.md"));
 
 console.log("Packing .mcpb…");
 execSync("npx --yes @anthropic-ai/mcpb pack dist/mcpb", { stdio: "inherit" });
