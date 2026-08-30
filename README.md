@@ -1,95 +1,90 @@
-[![prudent-mcp documentation](./docs/public/docs-hero.png)](https://rhozacc.github.io/prudent-mcp/)
+# prudent-mcp
 
-Prudent is an [MCP](https://modelcontextprotocol.io) server that gives any LLM client structured access to the IRB credit-risk model validation knowledge base — regulation, statistical tests, supervisor checks, validation playbooks, and a registry of the source documents it all derives from.
+A read-only [MCP](https://modelcontextprotocol.io) server that gives an LLM client structured
+access to the IRB credit-risk model validation knowledge base: regulation, statistical tests,
+supervisor checks, review playbooks, and a registry of the source documents it all derives from.
 
-**[Documentation](https://rhozacc.github.io/prudent-mcp/)**
+**[Documentation](https://rhozacc.github.io/prudent-mcp/)** · **[Download](https://github.com/rhozacc/prudent-mcp/releases/latest)**
 
----
+## Why
 
-## What it is
+Validating an IRB model means cross-referencing a bank's documentation against a moving target —
+CRR articles, EBA guidelines, ECB guides, supervisor commentary, statistical methodology. An LLM
+is good at that cross-referencing, but only with structured access to the source material.
+Training-data recall is not good enough when the answer has to survive a supervisor.
 
-Validating an IRB model means cross-referencing a bank's documentation against a moving target: CRR articles, EBA guidelines, ECB guides, supervisor commentary, and statistical methodology. An LLM is well-suited to that cross-referencing — but only if it has structured access to the source material rather than relying on training-data recall.
+So this server describes; it does not compute. No write tools, no execution, no orchestration.
+That boundary is the design, not a gap.
 
-`prudent-mcp` is the read-only knowledge layer. It defines five surfaces, each with its own URI scheme, and exposes them through MCP's standard tool/resource/prompt protocol. Any compliant client (Claude Desktop, Claude Code, Cursor, custom integrations) can plug it in.
+## The five surfaces
 
-| Surface | URI scheme | Notes |
+Each has its own URI scheme, and cross-surface references are typed — a `check://` that claims to
+derive from law must name a real `regulation://`.
+
+| Surface | URI scheme | An entry asserts |
 |---|---|---|
-| **Regulation** | `regulation://{framework}/{article}[/{paragraph}[/{point}]]` | Versioned per source document. `get_regulation` accepts `as_of` for historical lookups. Parent/child hierarchy nests sections and can attach the checks/tests that operationalize a record. |
-| **Tests** | `test://{test-id}` | Statistical tests described — aliases and family grouping let Claude recognize bank-specific variants. Never executed. |
-| **Checks** | `check://{area}/{topic}[/{specific}]` | Qualitative checks with a concrete pass/fail bar, traced back to law via `derived_from: RegulationId[]`. |
-| **Playbooks** | `playbook://{area}[/{subarea}]` | Guided walkthroughs structured as ordered phases with mixed-surface references. |
-| **Sources** | `source://{framework}/{document-id}` | The regulatory-context registry: which documents the corpus derives from, whether each is current / pending / superseded, when currency was last verified, and what milestones approach. |
+| Regulation | `regulation://{framework}/{article}[/{paragraph}[/{point}]]` | What the law says. Versioned; `get_regulation` takes an `as_of` date. |
+| Tests | `test://{test-id}` | What a statistical test measures and when to trust it. Described, never run. |
+| Checks | `check://{area}/{topic}[/{specific}]` | What a supervisor expects to see, traced to law via `derived_from`. |
+| Playbooks | `playbook://{area}[/{subarea}]` | How to walk a review area, phase by phase. |
+| Sources | `source://{framework}/{document-id}` | Whether the regulatory context is current — verification dates, supersession, milestones. |
 
-The server does not run statistical tests, accept writes, or orchestrate workflows. Those concerns live elsewhere.
+On top sit 19 tools: search and get per surface, list and get for the registry, and nine
+cross-cutting ones for traversal, reverse lookup, citation resolution and coverage gaps. See the
+[tool reference](https://rhozacc.github.io/prudent-mcp/tools/).
 
-## Quickstart
+## Install
+
+**Claude Desktop** — download the `.mcpb` from the
+[latest release](https://github.com/rhozacc/prudent-mcp/releases/latest) and open it. Claude
+Desktop installs it as an extension; an install-time prompt sets the optional corpus file path.
+No toolchain required.
+
+**Claude Code** — one line:
+
+```bash
+claude mcp add prudent --env CORPUS_FILE=/abs/path/corpus.json -- bun run /abs/path/prudent-mcp/src/mcpb-entry.ts
+```
+
+Leave `CORPUS_FILE` off to start empty. The same config shape works for Cursor and any other
+MCP-compliant host — see [Clients](https://rhozacc.github.io/prudent-mcp/guide/clients).
+
+**From source** — requires [Bun](https://bun.sh) ≥ 1.1:
 
 ```bash
 bun install
-bun run typecheck && bun test
-bun run inspect:demo   # opens MCP Inspector pre-seeded with PD-calibration content
+bun run test:ci        # typecheck + tests + corpus linter
+bun run inspect:demo   # MCP Inspector, pre-seeded with demo content
+bun run build:mcpb     # produces mcpb.mcpb
 ```
 
-Requires [Bun](https://bun.sh) ≥ 1.1. See [the quickstart guide](https://rhozacc.github.io/prudent-mcp/guide/quickstart) for full setup.
+## The corpus
 
-## Connect a client
+The adapters here return **empty results by default**. This repository is the machinery — schemas,
+tools, traversal, the validator — not the content.
 
-**Claude Desktop (MCPB — no Bun required)** — build once, then drag-and-drop:
+`examples/inmemory-demo.ts` seeds a small synthetic slice of PD-calibration content, and is the
+reference implementation for any backend; see the
+[adapter contract](https://rhozacc.github.io/prudent-mcp/adapters/). The curated **prudent
+corpus** is a separate proprietary product, licensed and shipped separately.
 
-```bash
-bun run build:mcpb   # produces dist/prudent-mcp.mcpb
-```
-
-Drag `dist/prudent-mcp.mcpb` onto Claude Desktop. An optional install-time prompt lets you point it at a corpus JSON file; leave it empty to start in demo mode.
-
-**Claude Desktop (manual config)** — edit `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "prudent": {
-      "command": "bun",
-      "args": [
-        "run",
-        "/absolute/path/to/prudent-mcp/examples/inmemory-demo.ts"
-      ]
-    }
-  }
-}
-```
-
-**Claude Code** — add `.mcp.json` to your project root with the same shape. Restart the client — the `prudent` server appears in the tools list. Same config works for Cursor and any other MCP-compliant host.
-
-## Corpus
-
-The adapters in this repo return empty results by default. `examples/inmemory-demo.ts` seeds a working slice of PD-calibration content and is the reference implementation for any backend.
-
-The curated **prudent corpus** — the full body of regulation, tests, checks, playbooks, and sources — is a proprietary product shipped separately. See [Adapters](https://rhozacc.github.io/prudent-mcp/adapters/) for the interface contract.
-
-## Stack
-
-[Bun](https://bun.sh) · TypeScript strict · [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) · [zod](https://zod.dev) · template-literal URI types for compile-time surface segregation
+Point `CORPUS_FILE` at a corpus JSON and it is linted on startup: broken cross-references,
+supersession cycles and stale sources refuse to serve.
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) — development setup, the checks CI runs, the two
-boundaries that are not negotiable (no corpus in this repo, no write path in the server),
+boundaries that are not negotiable (no corpus content in this repo, no write path in the server),
 and the CLA.
 
-## License
+## Licence
 
-[AGPL-3.0-only](./LICENSE) — the server code, and only the server code.
+[AGPL-3.0-only](./LICENSE), covering the server code and only the server code.
 
-Running it, unmodified, against your own corpus carries no obligation. Building on
-it is where the copyleft bites: a modified version offered to users over a network
-has to offer them its source too (AGPL §13), which covers the transport, auth and
-metering layer a hosted deployment necessarily adds.
+Running it unmodified against your own corpus carries no obligation. Building on it is where the
+copyleft bites: a modified version offered over a network must offer its source too (§13), which
+reaches the transport, auth and metering layer a hosted deployment adds.
 
-Two things sit outside that grant. The **prudent corpus** is a separate proprietary
-product under its own licence — data read at runtime is not a derivative work of the
-program that reads it, so nothing here applies to it. And embedding, OEM and on-prem
-deployments are available under a **commercial licence** instead of the AGPL: contact
-Econlab.
-
-Third-party components bundled into the `.mcpb` are listed in
-[THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
+A corpus is data read at runtime, not a derivative work — nothing here reaches yours. For
+embedding, OEM and on-prem, a **commercial licence** is available instead; contact Econlab.
+Bundled third-party components are listed in [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
