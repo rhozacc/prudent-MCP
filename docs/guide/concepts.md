@@ -6,45 +6,14 @@ If you already know the domain and want the schema, skip to [Corpus structure](/
 
 ## The surfaces, conceptually
 
-<div class="diagram" v-pre>
-<svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;color:var(--vp-c-text-1);">
-  <style>
-    .box   { fill: var(--vp-c-bg-soft); stroke: currentColor; stroke-width: 1.5; }
-    .label { fill: currentColor; font: 600 14px ui-sans-serif, system-ui, sans-serif; }
-    .sub   { fill: currentColor; font: 400 11px ui-sans-serif, system-ui, sans-serif; opacity: 0.7; }
-    .arrow { stroke: currentColor; stroke-width: 1.4; fill: none; marker-end: url(#a); opacity: 0.6; }
-  </style>
-  <defs>
-    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
-    </marker>
-  </defs>
-  <rect class="box" x="30"  y="60"  width="140" height="80" rx="6"/>
-  <text class="label" x="100" y="92"  text-anchor="middle">Regulation</text>
-  <text class="sub"   x="100" y="112" text-anchor="middle">what the law says</text>
-  <rect class="box" x="220" y="20"  width="140" height="80" rx="6"/>
-  <text class="label" x="290" y="52"  text-anchor="middle">Test</text>
-  <text class="sub"   x="290" y="72"  text-anchor="middle">how to measure</text>
-  <rect class="box" x="220" y="120" width="140" height="80" rx="6"/>
-  <text class="label" x="290" y="152" text-anchor="middle">Check</text>
-  <text class="sub"   x="290" y="172" text-anchor="middle">what passes</text>
-  <rect class="box" x="540" y="60"  width="140" height="80" rx="6"/>
-  <text class="label" x="610" y="92"  text-anchor="middle">Playbook</text>
-  <text class="sub"   x="610" y="112" text-anchor="middle">how to walk it</text>
-  <path class="arrow" d="M170,90  L220,60"/>
-  <path class="arrow" d="M170,110 L220,160"/>
-  <path class="arrow" d="M360,60  L540,90"/>
-  <path class="arrow" d="M360,160 L540,110"/>
-</svg>
-</div>
 
-The four content surfaces in the diagram correspond to the four kinds of artifact you actually deal with on a validation; a fifth surface sits beside them and tracks where they come from:
+Four content surfaces correspond to the four kinds of artifact you actually deal with on a validation; a fifth sits beside them and tracks where they come from:
 
 - **Regulation** is what the supervisor and the law require. It's the ground truth and the only versioned surface.
 - **Tests** are the statistical procedures — Hosmer-Lemeshow, Jeffreys, AUROC, Brier score — that turn portfolio data into evidence.
 - **Checks** are the qualitative bar: a concrete pass/fail expectation, traced back to the regulation it operationalises.
 - **Playbooks** are the walkthroughs that combine all of the above into an ordered review.
-- **Sources** are the provenance layer: the registry of publisher documents the corpus derives from, with currency status, verification dates, and upcoming milestones. Nothing references a source by URI — the join to regulation is the document identity — which is why they sit beside the diagram rather than in it.
+- **Sources** are the provenance layer: the registry of publisher documents the corpus derives from, with currency status, verification dates, and upcoming milestones. Nothing references a source by URI — the join to regulation is the document identity — which is why they sit beside the other four rather than among them.
 
 ## IRB in one paragraph
 
