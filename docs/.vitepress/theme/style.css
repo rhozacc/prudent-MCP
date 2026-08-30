@@ -494,11 +494,53 @@ strong { font-weight: 600; }
 /* ─── Mobile ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .VPDoc:not(.has-sidebar) .container,
+  /* Pad once, and let it be VitePress's own 24px gutter on .VPDoc. Padding
+     .container, .content-container and .content as well stacked four gutters —
+     24 + 20 + 20 + 20 = 84px of inset per side, which squeezed the prose column
+     to 222px on a 390px phone. */
+  .VPDoc .container,
   .VPDoc .content-container,
   .VPDoc .content {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: 0;
+    padding-right: 0;
   }
+
+  /* Stack table rows on a phone. These are reference tables — a surface name,
+     a URI scheme, a sentence — and none of the alternatives survive 342px:
+     display:table pushed the page sideways; scrolling hid the prose column
+     behind tall empty bands; wrapping in place shredded
+     `regulation://{framework}/{article}` into five fragments. Stacked, a row
+     reads as name, then URI, then description, and needs no header to be
+     understood — which is why dropping thead here costs nothing. */
+  .vp-doc table,
+  .vp-doc tbody,
+  .vp-doc tr,
+  .vp-doc td {
+    display: block;
+    width: auto;
+    max-width: 100%;
+  }
+  .vp-doc thead { display: none; }
+  .vp-doc tr {
+    border-bottom: 1px solid var(--border);
+    padding: 0.55rem 0;
+  }
+  .vp-doc tr:first-child { border-top: 1px solid var(--border); }
+  .vp-doc td {
+    border: none;
+    padding: 0.1rem 0;
+  }
+  /* The surface dot lives in its own cell, so stacking dropped it onto a line
+     of its own. Keep it inline with the name it belongs to; the cells after
+     that still stack. (Markdown already bolds the name — no rule needed.) */
+  .vp-doc td:has(> .dot) {
+    display: inline-block;
+    padding: 0;
+    margin-right: 0.45rem;
+  }
+  .vp-doc td:has(> .dot) + td { display: inline-block; }
+  .vp-doc td code,
+  .vp-doc th code { white-space: normal; overflow-wrap: anywhere; }
+
   .vp-doc h1 { font-size: 1.5rem; }
 }
