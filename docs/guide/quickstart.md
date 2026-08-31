@@ -95,7 +95,7 @@ For **Claude Desktop**, edit `claude_desktop_config.json`:
 }
 ```
 
-For **Claude Code**, create or edit `.mcp.json` in the project root:
+For **Claude Code**, a clone already carries a working `.mcp.json` — nothing to write. In any other project root, create one:
 
 ```json
 {

@@ -53,7 +53,7 @@ If the server fails to load, the developer console (`View → Developer → Open
 
 ## Claude Code
 
-In a project directory, create `.mcp.json`:
+This repo ships a `.mcp.json`, so a clone needs no setup — run `bun install`, start Claude Code in the clone, and the demo server is there:
 
 ```json
 {
@@ -62,7 +62,7 @@ In a project directory, create `.mcp.json`:
       "command": "bun",
       "args": [
         "run",
-        "/absolute/path/to/prudent-mcp/examples/inmemory-demo.ts"
+        "examples/inmemory-demo.ts"
       ]
     }
   }
@@ -71,7 +71,7 @@ In a project directory, create `.mcp.json`:
 
 Claude Code picks up `.mcp.json` automatically on session start. Confirm with `/mcp` — the `prudent` server should be listed as connected.
 
-To run against a real corpus instead of the in-memory demo, point `args` at the entrypoint that wires up your adapters.
+The path is relative to the directory holding `.mcp.json`. To reach the demo from *another* project, use an absolute path to `examples/inmemory-demo.ts` instead. To run against a real corpus, point `args` at the entrypoint that wires up your adapters.
 
 ## Cursor
 
