@@ -92,10 +92,17 @@ This project is licensed **AGPL-3.0-only** (see [LICENSE](./LICENSE)). Contribut
 accepted on those terms: what you submit is licensed inbound under the same licence it goes
 out under.
 
-Pull requests are gated by a **Contributor Licence Agreement** check
+Pull requests carry a **Contributor Licence Agreement** check
 ([cla-assistant](https://cla-assistant.io/rhozacc/prudent-mcp)). The bot comments on your
 first pull request with a link; signing is a one-time click and covers everything you send
 afterwards.
+
+The check reads the **commit authors** in the pull request, not the account that opened it.
+That distinction bites: if your commits are authored under some other identity — a work
+address, or a tool that commits as itself — the bot waits on *that* identity, and signing
+with your own account leaves the check pending with nothing you can do to clear it. Either
+sign with the account owning the authoring identity, or re-author the commits before you
+push. `git log -1 --format='%an <%ae>'` tells you which one you are about to be judged on.
 
 The CLA is not ceremony. prudent-mcp is offered under a commercial licence alongside the
 AGPL — for embedding, OEM and on-prem deployments where copyleft does not fit — and that is
