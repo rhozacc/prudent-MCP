@@ -24,7 +24,7 @@ derive from law must name a real `regulation://`.
 | Surface | URI scheme | An entry asserts |
 |---|---|---|
 | Regulation | `regulation://{framework}/{article}[/{paragraph}[/{point}]]` | What the law says. Versioned; `get_regulation` takes an `as_of` date. |
-| Tests | `test://{test-id}` | What a statistical test measures and when to trust it. Described, never run. |
+| Tests | `test://[{family}/]{test-id}` | What a statistical test measures and when to trust it. Described, never run. |
 | Checks | `check://{area}/{topic}[/{specific}]` | What a supervisor expects to see, traced to law via `derived_from`. |
 | Playbooks | `playbook://{area}[/{subarea}]` | How to walk a review area, phase by phase. |
 | Sources | `source://{framework}/{document-id}` | Whether the regulatory context is current — verification dates, supersession, milestones. |
