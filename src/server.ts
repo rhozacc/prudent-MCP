@@ -38,7 +38,14 @@ export function createServer(): McpServer {
         "Regulation is the only versioned surface: pass as_of (ISO date) for the text in force on that date; backends " +
         "without history serve current text, and an as_of predating all recorded versions is a miss.\n" +
         "Sources are the currency registry (verified dates, supersession, milestones); they join regulation via " +
-        "framework + document_id, never by URI reference.",
+        "framework + document_id, never by URI reference.\n" +
+        // Guidance, not enforcement: instructions are advisory and no string here can
+        // compel a client model to leave a quote alone. The machine-checked half of
+        // this promise is the verbatim invariant in src/validate.ts, which keeps
+        // markup out of the records the client is asked to reproduce.
+        "Presentation: reproduce record text — regulation, citations, commentary, expectations — verbatim as plain " +
+        "text; never add HTML, markdown emphasis or markup the record does not contain, and keep notation exactly " +
+        "as the source spells it (LGD in-default, not LGD with a subscript).",
     },
   );
 
