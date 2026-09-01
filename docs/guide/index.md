@@ -15,7 +15,7 @@ Validating an IRB model means cross-referencing a bank's documentation against a
 | Surface | URI scheme | What it represents |
 |---|---|---|
 | **Regulation** | `regulation://{framework}/{article}[/{paragraph}[/{point}]]` | Versioned per source document. `get_regulation` accepts `as_of` for historical lookups. |
-| **Tests** | `test://{test-id}` | Statistical tests described — what they measure, when to use them, how to read their output. Never executed. |
+| **Tests** | `test://[{family}/]{test-id}` | Statistical tests described — what they measure, when to use them, how to read their output. Never executed. |
 | **Checks** | `check://{area}/{topic}[/{specific}]` | Qualitative checks with a concrete pass/fail expectation, traced back to law via `derived_from: RegulationId[]`. |
 | **Playbooks** | `playbook://{area}[/{subarea}]` | Guided walkthroughs structured as ordered phases with mixed-surface references. |
 | **Sources** | `source://{framework}/{document-id}` | The regulatory-context registry — document currency (current / pending / superseded), verification dates, upcoming milestones. |

@@ -22,7 +22,7 @@ nothing executes and nothing mutates.
 | | Surface | URI scheme | An entry asserts |
 |---|---|---|---|
 | <span class="dot regulation"></span> | **Regulation** | `regulation://{framework}/{article}…` | What the law says — versioned, `as_of`-queryable |
-| <span class="dot test"></span> | **Tests** | `test://{test-id}` | What a statistical test measures and when to trust it — described, never executed |
+| <span class="dot test"></span> | **Tests** | `test://[{family}/]{test-id}` | What a statistical test measures and when to trust it — described, never executed |
 | <span class="dot check"></span> | **Checks** | `check://{area}/{topic}…` | What a supervisor expects to see, traced to law via `derived_from` |
 | <span class="dot playbook"></span> | **Playbooks** | `playbook://{area}…` | How to walk a review area, phase by phase |
 | <span class="dot commentary"></span> | **Sources** | `source://{framework}/{doc-id}` | Whether the regulatory context is current — verification dates, supersession, milestones |

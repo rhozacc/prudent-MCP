@@ -44,9 +44,9 @@ regulation://{framework}/{article}[/{paragraph}[/{point}]]
   e.g.  regulation://crr/178/1/a
         regulation://eba/gl-2017-16/78
 
-test://{test-id}
+test://[{family}/]{test-id}
   e.g.  test://jeffreys
-        test://hosmer-lemeshow
+        test://gl-2019-03/downturn-lgd-vs-reference-value-comparison
 
 check://{area}/{topic}[/{specific}]
   e.g.  check://calibration/pd/lra-derived

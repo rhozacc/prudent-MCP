@@ -77,15 +77,26 @@ export function registerResources(server: McpServer): void {
 
   server.registerResource(
     "test",
-    new ResourceTemplate("test://{id}", {
+    // {+path}, not {id}: a simple RFC 6570 variable cannot match a "/", and
+    // every test id the corpus mints is two-segment
+    // (test://gl-2019-03/downturn-lgd-vs-reference-value). With {id} this
+    // surface could not resolve a single real record — resources/read fell
+    // through to "no such resource" (-32602) rather than reaching the adapter
+    // at all. The other four surfaces already use {+path}; this was the one
+    // that did not, and the in-memory demo hid it by seeding SINGLE-segment
+    // test ids (test://jeffreys), which {id} matches perfectly.
+    new ResourceTemplate("test://{+path}", {
       list: undefined,
       complete: {
-        id: completeIds(async () => (await adapters.test.list()).map((t) => t.id), "test://"),
+        path: completeIds(async () => (await adapters.test.list()).map((t) => t.id), "test://"),
       },
     }),
-    { title: "Test", description: "test://{test-id}" },
-    async (uri, { id }) => {
-      const fullId = `test://${String(id)}` as TestId;
+    {
+      title: "Test",
+      description: "test://{family}/{test-id} — e.g. test://gl-2019-03/binomial",
+    },
+    async (uri, { path }) => {
+      const fullId = `test://${String(path)}` as TestId;
       const t = await adapters.test.get(fullId);
       if (t === null) notFound(uri.href, "search_tests");
       return asJsonContents(uri.href, t);
