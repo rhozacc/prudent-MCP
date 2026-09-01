@@ -484,7 +484,7 @@ Outputs `docs/schemas/*.schema.json` and the rendered [Schema reference](/corpus
 Two scripts operate over whatever corpus is wired (the in-memory demo by default, or a file via `CORPUS_FILE`):
 
 ```bash
-bun run validate      # integrity linter — mirror invariant, dangling refs, cycles, source supersession; warns on stale sources
+bun run validate      # integrity linter — mirror invariant, dangling refs, cycles, source supersession, verbatim text (no markup); warns on stale sources
 bun run graph         # regenerates docs/corpus/graph.md, a Mermaid map of the corpus
 ```
 

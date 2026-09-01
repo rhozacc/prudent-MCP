@@ -29,7 +29,7 @@ scripts/generate-schemas.ts  zod → JSON Schema export (chained to also write t
 scripts/schema-registry.ts   shared named-schema list (generator, schema-docs, drift test)
 scripts/generate-schema-docs.ts  regenerates docs/corpus/schemas.md (rendered schema reference)
 scripts/list-all.ts          prints full corpus overview to stdout
-scripts/validate-corpus.ts   integrity linter (mirror invariant, dangling refs, cycles, source supersession; warns on stale sources); CI-able
+scripts/validate-corpus.ts   integrity linter (mirror invariant, dangling refs, cycles, source supersession, verbatim text; warns on stale sources); CI-able
 scripts/generate-graph.ts    regenerates docs/corpus/graph.md (Mermaid corpus map)
 scripts/build-mcpb.ts        bundle src/mcpb-entry.ts + pack .mcpb
 docs/                      architecture, corpus structure, schema reference, corpus graph

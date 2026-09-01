@@ -25,6 +25,9 @@
  *   5. Source registry coherence — unique ids; superseded status and the
  *      superseded_by pointer imply each other; pointers resolve and the
  *      supersession chain is acyclic; verified dates are not in the future.
+ *   6. Verbatim invariant — no HTML markup in the fields whose promise is
+ *      reproduction of the source document (the covered set, and the reasons
+ *      for the exclusions, are enumerated above `validateCorpus`).
  *
  * Staleness (a current source whose `verified` is older than
  * STALE_AFTER_DAYS) is advisory, not fatal — see `corpusWarnings`.
@@ -62,6 +65,71 @@ export function staleSourceIds(sources: Source[], now: Date = new Date()): Sourc
     .filter((s) => s.status === "current" && s.verified < cutoff)
     .map((s) => s.id);
 }
+
+// --- Verbatim text ------------------------------------------------------------
+
+/**
+ * An actual HTML tag: `<sub>`, `</sub>`, `<br/>`, `<span class="x">`.
+ *
+ * Deliberately NOT a bare `/[<>]/` test. Regulation text is full of
+ * mathematical comparators — "PD < 0.03", "p-value > α", "LGD >= 0" — and a
+ * naive check would fail on real law. So a match needs the tag shape: `<`,
+ * an optional closing slash, an element name starting with a letter, then
+ * either the closing `>` (with an optional self-closing slash) or one or more
+ * `name="value"` attributes.
+ *
+ * Requiring `=` on attributes is what keeps prose like "if x<y and z>0" from
+ * matching: "y and z" would otherwise read as valueless boolean attributes.
+ * The residual false positive is prose that writes a comparison as `a<b>c`
+ * with no spaces — indistinguishable from a tag, and vanishingly rare in
+ * drafted regulation.
+ *
+ * Scope is HTML tags only. Markdown emphasis (`*`, `_`) is not checked: those
+ * characters are legitimate in this corpus (multiplication, footnote markers,
+ * `PD_i`-style subscript notation), so a rule on them would be false positives
+ * all the way down. The markdown half of the promise lives in the server
+ * `instructions` string, which is guidance rather than enforcement.
+ */
+const HTML_TAG =
+  /<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s+[a-zA-Z_:][a-zA-Z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))*\s*\/?>/;
+
+/**
+ * The first HTML tag in `value`, or undefined if there is none. Exported so a
+ * corpus-producing pipeline can run the same test before writing a record.
+ */
+export function findMarkup(value: string): string | undefined {
+  return HTML_TAG.exec(value)?.[0] ?? undefined;
+}
+
+/**
+ * Which fields rule 6 covers, and why the rest are out.
+ *
+ * COVERED — text the corpus promises to reproduce as the source document
+ * writes it, and that an analyst pastes into a validation report or finding.
+ * Markup here means the quote is no longer verbatim, which is a correctness
+ * failure, not a style nit:
+ *   Regulation.text                 the provision itself
+ *   Regulation.citation             the locator quoted beside it
+ *   Regulation.commentary[].source  the attribution of an interpretive quote
+ *   Regulation.commentary[].text    the quoted Q&A / supervisor wording
+ *   Check.expectation               the bar quoted into a finding
+ *   Test.acceptance_criteria        the pass/fail wording quoted into a report
+ *
+ * NOT COVERED, on purpose:
+ *   - Curated editorial prose written for this corpus rather than reproduced
+ *     from a document — Test.name/purpose, Check.name, Playbook.gates,
+ *     Phase.name/description, Source.title/notes, ReviewArea.name. Markup
+ *     there would be a formatting slip, not a broken quote.
+ *   - Short enumerated labels — Check.expected_evidence, Test.aliases,
+ *     Source.milestones[].event. Same reasoning, and nothing quotes them as
+ *     source wording.
+ *   - Ids, URIs, frameworks, document ids/versions, dates and enums. Already
+ *     format-constrained by the zod schemas and the reference rules above; a
+ *     tag in one of those fails earlier and louder.
+ *
+ * Promoting a field into the covered set is a deliberate call — it makes any
+ * existing corpus with markup in that field fatally invalid until cleaned.
+ */
 
 /**
  * Validate a corpus and return a deduplicated list of human-readable
@@ -204,6 +272,27 @@ export function validateCorpus(corpus: CorpusInput, now: Date = new Date()): str
       cursor = sourceById.get(cursor)?.superseded_by;
     }
   }
+
+  // 6 — verbatim invariant. The covered set and the reasoning behind the
+  // exclusions are documented above this function. Fatal, not advisory: a
+  // provision carrying markup no longer matches the document it cites.
+  const verbatim = (id: string, field: string, value: string | undefined): void => {
+    if (value === undefined) return;
+    const tag = findMarkup(value);
+    if (tag !== undefined) {
+      errors.push(`${id}: ${field} contains HTML markup ${tag} (verbatim invariant)`);
+    }
+  };
+  for (const reg of regs) {
+    verbatim(reg.id, "text", reg.text);
+    verbatim(reg.id, "citation", reg.citation);
+    reg.commentary.forEach((c, i) => {
+      verbatim(reg.id, `commentary[${i}].source`, c.source);
+      verbatim(reg.id, `commentary[${i}].text`, c.text);
+    });
+  }
+  for (const c of checks) verbatim(c.id, "expectation", c.expectation);
+  for (const t of tests) verbatim(t.id, "acceptance_criteria", t.acceptance_criteria);
 
   return [...new Set(errors)];
 }
