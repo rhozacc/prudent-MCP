@@ -115,6 +115,107 @@ describe("rankedSearch", () => {
 
 // ── regulationSearchFields — the id field is query-shape dependent ─────────────
 
+describe("coverage — how many of the query's tokens a record matched", () => {
+  // The defect: score is a SUM over tokens, so a record matching only the
+  // commonest token could outrank one matching every token. On the real corpus
+  // "long run average default rate" matched 707 of 1,365 regulation records and
+  // "margin of conservatism data quality" matched 984 of 1,107 checks, because
+  // everything says "data" somewhere — and search_playbooks("PD model
+  // lifecycle") put the one playbook actually about the lifecycle FOURTH.
+
+  it("reports coverage and the query's token count on every match", () => {
+    const hits = rankedSearch(
+      [check("check://a", "downturn calibration", "")],
+      "downturn calibration",
+      checkSearchFields,
+    );
+    expect(hits[0]!.coverage).toBe(2);
+    expect(hits[0]!.query_tokens).toBe(2);
+  });
+
+  it("ranks a record matching every token above one matching fewer at a HIGHER score", () => {
+    // `narrow` matches both tokens once. `broad` matches only "model", but
+    // eight times, so the old sum put it first.
+    const narrow = check("check://narrow", "model lifecycle", "");
+    const broad = check("check://broad", "model model model model model model model model", "");
+    const hits = rankedSearch([broad, narrow], "model lifecycle", checkSearchFields);
+
+    expect(hits[0]!.record.id).toBe("check://narrow");
+    expect(hits[0]!.coverage).toBe(2);
+    // Pinning that this is coverage doing the work, not score: the loser
+    // genuinely scores higher.
+    expect(hits[1]!.score).toBeGreaterThan(hits[0]!.score);
+  });
+
+  it("falls back to score within one coverage tier", () => {
+    const strong = check("check://strong", "downturn downturn calibration", "");
+    const weak = check("check://weak", "downturn calibration", "");
+    const hits = rankedSearch([weak, strong], "downturn calibration", checkSearchFields);
+    expect(hits.map((h) => h.coverage)).toEqual([2, 2]);
+    expect(hits[0]!.record.id).toBe("check://strong");
+  });
+
+  it("counts a token once per record however many fields carry it", () => {
+    // Coverage is "did this record match the token at all", not a tally.
+    const hits = rankedSearch(
+      [check("check://both", "downturn", "downturn", ["downturn"])],
+      "downturn calibration",
+      checkSearchFields,
+    );
+    expect(hits[0]!.coverage).toBe(1);
+    expect(hits[0]!.query_tokens).toBe(2);
+  });
+
+  it("counts a token matched in a DIFFERENT field from its neighbour", () => {
+    // "downturn" in the name and "calibration" only in the evidence is still
+    // full coverage — the record is about both.
+    const hits = rankedSearch(
+      [check("check://split", "downturn", "", ["calibration evidence"])],
+      "downturn calibration",
+      checkSearchFields,
+    );
+    expect(hits[0]!.coverage).toBe(2);
+  });
+
+  it("leaves single-token queries exactly as they were", () => {
+    // Coverage is 1 for every match, so ordering falls straight through to
+    // score. This is what makes the change safe for the common case.
+    const items = [
+      check("check://one", "downturn", ""),
+      check("check://three", "downturn downturn downturn", ""),
+      check("check://two", "downturn downturn", ""),
+    ];
+    const hits = rankedSearch(items, "downturn", checkSearchFields);
+    expect(hits.map((h) => h.coverage)).toEqual([1, 1, 1]);
+    expect(hits.map((h) => h.record.id)).toEqual([
+      "check://three",
+      "check://two",
+      "check://one",
+    ]);
+    // And score is still strictly decreasing — coverage did not reorder it.
+    expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
+    expect(hits[1]!.score).toBeGreaterThan(hits[2]!.score);
+  });
+
+  it("still drops records matching no token at all", () => {
+    const hits = rankedSearch(
+      [check("check://a", "downturn", "")],
+      "unrelated words entirely",
+      checkSearchFields,
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it("keeps ties deterministic by input order at equal coverage and score", () => {
+    const items = [
+      check("check://first", "downturn calibration", ""),
+      check("check://second", "downturn calibration", ""),
+    ];
+    expect(rankedSearch(items, "downturn calibration", checkSearchFields).map((h) => h.record.id))
+      .toEqual(["check://first", "check://second"]);
+  });
+});
+
 describe("regulationSearchFields", () => {
   const regs = [
     regulation("regulation://crr/180", "CRR Article 180", "PD estimation requirements."),

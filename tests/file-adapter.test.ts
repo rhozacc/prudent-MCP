@@ -396,3 +396,66 @@ describe("resolveCitationIn", () => {
     expect(hit?.id).toBe("regulation://crr/178/1/a");
   });
 });
+
+describe("taxonomy: authored wins, derived fills in", () => {
+  // The misfire this closes: the shipped corpus carried `taxonomy: []`, the
+  // adapter served it verbatim, and list_review_areas answered {"areas": []} —
+  // which also made get_area_overview unreachable, since no slug could match a
+  // list that had none. Two of nineteen tools inert, and they are the entry
+  // path the server's instructions name first.
+  const playbooks = [
+    {
+      id: "playbook://gl/5-pd-estimation",
+      area: "PD Estimation",
+      phases: [],
+      gates: [],
+      regulatory_scope: [],
+      last_updated: "2026-01-01",
+    },
+    {
+      id: "playbook://egim/1-credit-risk",
+      area: "Credit Risk",
+      subarea: "IRB Approach Governance",
+      phases: [],
+      gates: [],
+      regulatory_scope: [],
+      last_updated: "2026-01-01",
+    },
+  ];
+
+  it("serves an authored taxonomy verbatim — it can name areas the corpus lacks", () => {
+    const corpus = loadCorpusFile(
+      writeCorpus("authored.json", {
+        playbooks,
+        taxonomy: [{ id: "scope", name: "Scope" }],
+      }),
+    );
+    const a = createFileAdapters(corpus);
+    return a.meta.taxonomy().then((t) => {
+      expect(t.map((n) => n.id)).toEqual(["scope"]);
+    });
+  });
+
+  it("derives from the playbooks when the corpus authored none", async () => {
+    const corpus = loadCorpusFile(writeCorpus("derived.json", { playbooks }));
+    expect(corpus.taxonomy).toEqual([]); // absent on disk
+    const t = await createFileAdapters(corpus).meta.taxonomy();
+    expect(t.map((n) => n.id)).toEqual([
+      "pd-estimation",
+      "credit-risk",
+      "credit-risk.irb-approach-governance",
+    ]);
+    expect(t[0]!.name).toBe("PD Estimation");
+  });
+
+  it("derives when the corpus authored an EMPTY taxonomy — the shipped case", async () => {
+    const corpus = loadCorpusFile(writeCorpus("empty-tax.json", { playbooks, taxonomy: [] }));
+    const t = await createFileAdapters(corpus).meta.taxonomy();
+    expect(t.length).toBe(3);
+  });
+
+  it("still serves [] when there is nothing to derive from", async () => {
+    const corpus = loadCorpusFile(writeCorpus("no-playbooks.json", {}));
+    expect(await createFileAdapters(corpus).meta.taxonomy()).toEqual([]);
+  });
+});

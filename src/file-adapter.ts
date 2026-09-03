@@ -8,6 +8,7 @@ import type {
   SourceAdapter,
   TestAdapter,
 } from "./adapters.ts";
+import { deriveTaxonomy } from "./areas.ts";
 import { computeReferrers } from "./referrers.ts";
 import {
   checkSearchFields,
@@ -312,7 +313,11 @@ export function createFileAdapters(corpus: CorpusFile): {
       return resolveCitationIn(corpus.regulation, text);
     },
     async taxonomy(): Promise<ReviewArea[]> {
-      return corpus.taxonomy;
+      // An authored taxonomy wins: it can name areas the corpus does not cover
+      // yet, which a derived one cannot. With none, derive from the playbooks
+      // rather than serving [] — an empty list here takes list_review_areas
+      // AND get_area_overview out of service, and those are the entry path.
+      return corpus.taxonomy.length > 0 ? corpus.taxonomy : deriveTaxonomy(corpus.playbooks);
     },
   };
 

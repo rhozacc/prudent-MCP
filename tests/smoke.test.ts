@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 
 import { createServer } from "../src/server.ts";
 import { adapters } from "../src/adapters.ts";
+import { playbookInArea, resolveArea } from "../src/areas.ts";
 import { buildRegulationTree, computeCoverageGaps, expandRegulation } from "../src/tools/meta.ts";
 
 describe("server registration", () => {
@@ -92,17 +93,22 @@ describe("traversal tools", () => {
     expect(result).toBeNull();
   });
 
+  // These two used to reimplement get_area_overview's resolution and filter
+  // inline, which is why nobody noticed the tool compared a slug against
+  // free-form prose: the copy was wrong in the same way, and the demo's areas
+  // are already slugs ("calibration" + "pd" === "calibration.pd") so both
+  // agreed. They now go through the SAME src/areas.ts helpers the tool calls,
+  // so a divergence has to fail here. tests/areas.test.ts covers the prose
+  // shape real extracted playbooks actually have.
   it("get_area_overview for calibration.pd returns area node, expanded playbooks, and deduplicated ID lists", async () => {
     const area = "calibration.pd";
     const allAreas = await adapters.meta.taxonomy();
-    const areaNode = allAreas.find((a) => a.id === area);
+    const areaNode = resolveArea(allAreas, area);
     expect(areaNode).toBeDefined();
     expect(areaNode!.id).toBe("calibration.pd");
 
     const allPlaybooks = await adapters.playbook.list();
-    const areaPlaybooks = allPlaybooks.filter(
-      (p) => p.area === area || (p.subarea !== undefined && `${p.area}.${p.subarea}` === area),
-    );
+    const areaPlaybooks = allPlaybooks.filter((p) => playbookInArea(p, areaNode!));
     expect(areaPlaybooks.length).toBeGreaterThanOrEqual(1);
 
     const regulation_ids: string[] = [];
@@ -134,8 +140,31 @@ describe("traversal tools", () => {
 
   it("get_area_overview returns null for an unknown area slug", async () => {
     const allAreas = await adapters.meta.taxonomy();
-    const areaNode = allAreas.find((a) => a.id === "nonexistent.area");
-    expect(areaNode).toBeUndefined();
+    expect(resolveArea(allAreas, "nonexistent.area")).toBeUndefined();
+  });
+
+  it("get_area_overview accepts an area NAME, not only its slug", async () => {
+    // What a model has to hand after reading a playbook record is the prose.
+    const allAreas = await adapters.meta.taxonomy();
+    const byName = resolveArea(allAreas, "PD Calibration");
+    expect(byName?.id).toBe("calibration.pd");
+
+    const allPlaybooks = await adapters.playbook.list();
+    expect(allPlaybooks.filter((p) => playbookInArea(p, byName!)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("list_review_areas is never empty for a corpus that has playbooks", async () => {
+    // The misfire: the shipped corpus authored no taxonomy, so this answered
+    // {"areas": []} and took get_area_overview down with it — the entry path
+    // the server's own instructions name first had no reachable second step.
+    const areas = await adapters.meta.taxonomy();
+    const playbooks = await adapters.playbook.list();
+    expect(playbooks.length).toBeGreaterThan(0);
+    expect(areas.length).toBeGreaterThan(0);
+    // And every area advertised can actually be entered.
+    for (const node of areas) {
+      expect(resolveArea(areas, node.id)?.id).toBe(node.id);
+    }
   });
 
   it("get_check returns expected_evidence for check://calibration/pd/lra-derived", async () => {
@@ -368,5 +397,103 @@ describe("MCP wire contracts (in-memory transport)", () => {
       argument: { name: "area", value: "cali" },
     });
     expect(pc.completion.values).toContain("calibration.pd");
+  });
+
+  // The entry path, over the wire. These exist because the unit tests around
+  // it all called the shared helpers directly, so a tool that could not
+  // REGISTER still passed them: declaring `outputSchema: z.union([...])` on
+  // get_playbook crashed the SDK ("undefined is not an object (evaluating
+  // 's._zod')") and took BOTH of its modes down, and nothing in the suite
+  // noticed. MCP output schemas must be object schemas.
+  it("get_playbook serves the full record AND detail: 'steps' over the wire", async () => {
+    const full = await client.callTool({
+      name: "get_playbook",
+      arguments: { id: "playbook://calibration/pd" },
+    });
+    expect(full.isError).not.toBe(true);
+    const fullRec = full.structuredContent as { phases: Array<{ references: string[] }> };
+    expect(Array.isArray(fullRec.phases[0]?.references)).toBe(true);
+
+    const steps = await client.callTool({
+      name: "get_playbook",
+      arguments: { id: "playbook://calibration/pd", detail: "steps" },
+    });
+    expect(steps.isError).not.toBe(true);
+    const rec = steps.structuredContent as {
+      phases: Array<{ name: string; description: string; reference_count: number }>;
+      gates: string[];
+      regulatory_scope_count: number;
+    };
+    // Same walkthrough, reference arrays replaced by their counts.
+    expect(rec.phases.length).toBe(fullRec.phases.length);
+    expect(rec.phases[0]?.reference_count).toBe(fullRec.phases[0]!.references.length);
+    expect("references" in (rec.phases[0] ?? {})).toBe(false);
+    expect(typeof rec.regulatory_scope_count).toBe("number");
+    // And it is genuinely smaller — that is the whole point of the mode.
+    const size = (r: typeof steps) => JSON.stringify(r.structuredContent).length;
+    expect(size(steps)).toBeLessThan(size(full));
+  });
+
+  it("list_review_areas is non-empty over the wire, and every id it advertises can be entered", async () => {
+    const listed = await client.callTool({ name: "list_review_areas", arguments: {} });
+    expect(listed.isError).not.toBe(true);
+    const { areas } = listed.structuredContent as { areas: Array<{ id: string; name: string }> };
+    expect(areas.length).toBeGreaterThan(0);
+
+    for (const node of areas) {
+      const ov = await client.callTool({
+        name: "get_area_overview",
+        arguments: { area: node.id },
+      });
+      expect(ov.isError, `get_area_overview(${node.id})`).not.toBe(true);
+    }
+  });
+
+  it("get_area_overview takes an area NAME, not only its slug", async () => {
+    // What an agent has after reading a playbook record is the prose.
+    const bySlug = await client.callTool({
+      name: "get_area_overview",
+      arguments: { area: "calibration.pd" },
+    });
+    const byName = await client.callTool({
+      name: "get_area_overview",
+      arguments: { area: "PD Calibration" },
+    });
+    expect(byName.isError).not.toBe(true);
+    expect((byName.structuredContent as { area: { id: string } }).area.id).toBe(
+      (bySlug.structuredContent as { area: { id: string } }).area.id,
+    );
+  });
+
+  it("get_area_overview still misses loudly, naming both accepted forms", async () => {
+    const bad = await client.callTool({
+      name: "get_area_overview",
+      arguments: { area: "not-an-area" },
+    });
+    expect(bad.isError).toBe(true);
+    const text = (bad.content as Array<{ text: string }>)[0]!.text;
+    expect(text).toContain("list_review_areas");
+    expect(text).toMatch(/slug|name/);
+  });
+
+  it("get_area_overview lists playbooks referenced by the area's own playbooks", async () => {
+    // Some playbooks index others. Without playbook_ids an area whose only
+    // playbook is such an index answered "1 playbook, 0 of everything else"
+    // and the caller had to expand it anyway.
+    const ov = await client.callTool({
+      name: "get_area_overview",
+      arguments: { area: "calibration" },
+    });
+    expect(ov.isError).not.toBe(true);
+    const d = ov.structuredContent as {
+      playbooks: Array<{ id: string }>;
+      playbook_ids: string[];
+    };
+    expect(Array.isArray(d.playbook_ids)).toBe(true);
+    // Never re-lists a playbook already expanded in `playbooks`.
+    const own = new Set(d.playbooks.map((p) => p.id));
+    for (const id of d.playbook_ids) expect(own.has(id)).toBe(false);
+    // And no duplicates.
+    expect(new Set(d.playbook_ids).size).toBe(d.playbook_ids.length);
   });
 });
