@@ -105,7 +105,9 @@ resolve_citation("CRR Article 178")
 
 ## `list_review_areas`
 
-The canonical taxonomy of review areas. Use this to map a real-world analyst task onto the corpus's structure before fetching playbooks or checks.
+The taxonomy of review areas. **Start here** to map a real-world analyst task onto the corpus's structure, then feed an area id to [`get_area_overview`](#get_area_overview).
+
+A backend that authors an explicit `taxonomy` has it served verbatim — an authored taxonomy can name areas the corpus does not cover yet, which a derived one cannot. A backend that authors none gets one **derived from the playbooks present**: each distinct `area` becomes a top-level node and each `subarea` a child, keyed by [`src/areas.ts`](https://github.com/rhozacc/prudent-mcp/blob/main/src/areas.ts). So this is never empty for a corpus that has playbooks.
 
 **Inputs:** none
 
@@ -175,10 +177,14 @@ One-shot entry point for a review area. Combines `list_review_areas` + all match
 
 | Parameter | Type | Notes |
 |---|---|---|
-| `area` | `string` | Canonical area slug — use `list_review_areas` first to confirm |
+| `area` | `string` | Area slug (`"pd-estimation"`, `"calibration.pd"`) **or** the area name as spelled on a playbook record (`"PD Estimation"`) — call `list_review_areas` for the canonical list |
 | `detail` | `"concise" \| "full"` | Optional, default `"concise"` — reference stubs vs. embedded records in the expanded playbooks |
 
-**Returns:** `AreaOverview` — unknown slugs are an `isError` result pointing at `list_review_areas`.
+**Returns:** `AreaOverview` — unknown areas are an `isError` result pointing at `list_review_areas`.
+
+Asking for a top-level area includes everything in its subareas, so
+`get_area_overview("credit-risk")` covers the playbooks filed under
+`credit-risk.irb-approach-governance-…` too.
 
 ```ts
 type AreaOverview = {
@@ -187,8 +193,14 @@ type AreaOverview = {
   regulation_ids: RegulationId[];   // deduplicated across all phases
   check_ids: CheckId[];
   test_ids: TestId[];
+  playbook_ids: PlaybookId[];       // other playbooks referenced, minus the ones above
 }
 ```
+
+`playbook_ids` matters because some playbooks are indexes over others: a
+lifecycle playbook's phases reference the per-parameter playbooks and nothing
+else, so an overview gathering only regulation/check/test ids would answer
+"1 playbook, 0 of everything".
 
 **Example:**
 ```ts

@@ -12,8 +12,20 @@
  *   - Only the declared fields are scanned, each with a weight. Score = sum
  *     over tokens of `weight × occurrences`; a whole-word occurrence counts
  *     full weight, a substring-only occurrence counts half.
- *   - Results are sorted by score descending, ties broken by input order, so
- *     the ranking is fully deterministic.
+ *   - Results are ordered by COVERAGE first — how many of the query's distinct
+ *     tokens the record matches at all — and only then by score, ties broken
+ *     by input order. So the ranking is fully deterministic.
+ *
+ *     Coverage exists because a pure score sum is an OR: on the real corpus
+ *     "long run average default rate" matched 707 of 1,365 regulation records
+ *     and "margin of conservatism data quality" matched 984 of 1,107 checks,
+ *     because every record says "data" or "model" somewhere. Summing lets a
+ *     record that matches only the commonest token outrank one that matches
+ *     every token, which is how `search_playbooks("PD model lifecycle")` put
+ *     the one playbook actually about the lifecycle in FOURTH place. Ordering
+ *     by coverage first fixes that without dropping anything: a single-token
+ *     query has coverage 1 everywhere, so it falls straight through to score
+ *     and behaves exactly as before.
  *   - Each result carries the matched field and a ~120-char excerpt around
  *     the first match in the record's best-scoring field.
  *
@@ -34,6 +46,15 @@ export interface SearchField<T = unknown> {
 export interface SearchMatch<T> {
   record: T;
   score: number;
+  /**
+   * How many of the query's distinct tokens this record matched at all. The
+   * primary sort key, and worth surfacing: `coverage < query_tokens` tells a
+   * caller the hit is partial before it reads the excerpt and assumes
+   * otherwise.
+   */
+  coverage: number;
+  /** Distinct tokens in the query, so `coverage` can be read as a fraction. */
+  query_tokens: number;
   matched: { field: string; excerpt: string };
 }
 
@@ -90,6 +111,10 @@ export function rankedSearch<T>(
   items.forEach((record, order) => {
     let total = 0;
     let best: { field: string; score: number; text: string; index: number } | null = null;
+    // Distinct query tokens this record matches ANYWHERE, across every field.
+    // Counted per record rather than per field: a record naming "downturn" in
+    // its area and "LGD" in a phase description has covered both.
+    const covered = new Set<string>();
 
     for (const field of fields) {
       const raw = field.get(record);
@@ -106,6 +131,7 @@ export function rankedSearch<T>(
         for (const token of tokens) {
           const occ = countOccurrences(lower, token);
           if (occ.total === 0) continue;
+          covered.add(token);
           // Whole-word occurrences at full weight, substring-only at half.
           fieldScore += field.weight * (occ.whole + 0.5 * (occ.total - occ.whole));
           if (occ.first < valueFirst) valueFirst = occ.first;
@@ -128,6 +154,8 @@ export function rankedSearch<T>(
       scored.push({
         record,
         score: total,
+        coverage: covered.size,
+        query_tokens: tokens.length,
         matched: { field: best.field, excerpt: makeExcerpt(best.text, best.index) },
         order,
       });
@@ -135,9 +163,15 @@ export function rankedSearch<T>(
   });
 
   return scored
-    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .sort((a, b) => b.coverage - a.coverage || b.score - a.score || a.order - b.order)
     .slice(0, Math.max(0, limit))
-    .map(({ record, score, matched }) => ({ record, score, matched }));
+    .map(({ record, score, coverage, query_tokens, matched }) => ({
+      record,
+      score,
+      coverage,
+      query_tokens,
+      matched,
+    }));
 }
 
 // --- Per-surface field sets -------------------------------------------------

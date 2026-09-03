@@ -9,7 +9,7 @@
 | `get_corpus_info` | meta | What's loaded — counts, coverage, stale sources |
 | `get_referrers` | meta | Everything that references a given ID |
 | `resolve_citation` | meta | Loose prose citation → structured Regulation |
-| `list_review_areas` | meta | Canonical taxonomy of review areas |
+| `list_review_areas` | meta | Taxonomy of review areas — authored, or derived from the playbooks |
 | `expand_playbook` | meta | Playbook with all Phase.references resolved inline |
 | `get_area_overview` | meta | One-shot entry point: area node + expanded playbooks + deduplicated IDs |
 | `expand_regulation` | meta | Regulation with its children (sub-regs + checks/tests) resolved inline |
@@ -22,7 +22,7 @@
 | `search_checks` | checks | Ranked search over check name, expectation, expected evidence |
 | `get_check` | checks | Fetch a check by ID |
 | `search_playbooks` | playbooks | Ranked search over area, subarea, phase names and descriptions |
-| `get_playbook` | playbooks | Fetch a playbook by ID |
+| `get_playbook` | playbooks | Fetch a playbook by ID (`detail: "steps"` drops the reference lists) |
 | `list_sources` | sources | The source-document registry with currency status, optionally filtered |
 | `get_source` | sources | Fetch a source document record by ID |
 
@@ -34,6 +34,7 @@
 - **Structured output** — tools with an output schema return `structuredContent` plus a JSON text fallback (the spec requires text alongside structured content).
 - **Misses are `isError`** — an unknown id or slug comes back as an `isError` result with a pointer to the right search/list tool, never the literal string `"null"`. Resource reads miss with JSON-RPC error `-32002`.
 - **The search envelope** — the four `search_*` tools share `{ results, total_matches, offset, truncated }` with `limit` (default 20, max 100) and `offset` paging, and a text hint when truncated. Queries are ranked and field-scoped, minimum 2 characters — search never enumerates the corpus; that's what `list_*` tools and traversal are for. Note the built-in adapters cap ranked matches at 20, so `total_matches` tops out there.
+- **Ranking is coverage-first** — results are ordered by how many of the query's distinct tokens a record matches, and only then by weighted score. A multi-word query is otherwise an OR: a record matching just the commonest token can outrank one matching every token, because score is a sum. Single-token queries are unaffected (coverage is 1 everywhere, so score alone decides). Practical consequence: **more words narrow the result set** rather than widening it, so prefer `"downturn LGD calibration"` over `"LGD"`.
 - **`detail: "concise" | "full"`** — search and traversal tools are concise by default (per-surface projections, `{ type, id, label }` reference stubs); pass `detail: "full"` for complete records.
 - **Lenient ids** — id parameters tolerate surrounding whitespace, quotes, brackets, and trailing punctuation.
 
@@ -63,7 +64,7 @@ source://{framework}/{document-id}
 
 ## Workflow patterns
 
-**Starting a review area:** `list_review_areas` → confirm slug → `get_area_overview` → work through expanded phases.
+**Starting a review area:** `list_review_areas` → `get_area_overview` (takes the slug or the area name) → work through expanded phases.
 
 **Resolving a bank citation:** `resolve_citation("Art. 178(1)(a)")` → `get_regulation` → `get_referrers` → checks + playbooks.
 

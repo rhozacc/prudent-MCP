@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { adapters } from "../adapters.ts";
+import { playbookInArea, resolveArea } from "../areas.ts";
 import type {
   AnyId,
   Check,
@@ -61,6 +62,15 @@ type AreaOverview = {
   regulation_ids: RegulationId[];
   check_ids: CheckId[];
   test_ids: TestId[];
+  /**
+   * Playbooks referenced BY this area's playbooks, minus the ones already
+   * listed above. Collected because some playbooks are indexes over others —
+   * a lifecycle playbook's phases reference the per-parameter playbooks and
+   * nothing else, so an overview that only gathered regulation/check/test ids
+   * answered "1 playbook, 0 of everything" and left the caller to expand it
+   * anyway. Which is the entry path failing at its second step.
+   */
+  playbook_ids: PlaybookId[];
 };
 
 type ExpandedRegulation = {
@@ -366,10 +376,13 @@ export function registerMetaTools(server: McpServer): void {
     {
       title: "List review areas",
       description:
-        "The canonical taxonomy of review areas. Use this to map a real-world task " +
-        "('I'm reviewing LGD calibration') onto the corpus's structure. Returns " +
-        "{ areas: [{ id, name, parent, children }] } — feed an area id to " +
-        "get_area_overview for the one-shot bundle of playbooks, checks, and regulation.",
+        "The taxonomy of review areas — START HERE to map a real-world task " +
+        "('I'm reviewing LGD calibration') onto the corpus's structure, then feed an area id " +
+        "to get_area_overview for the one-shot bundle of playbooks, checks and regulation. " +
+        "Returns { areas: [{ id, name, parent, children }] }; ids are dotted slugs and a " +
+        "child id is prefixed by its parent's. Backends that author no taxonomy get one " +
+        "derived from the playbooks present, so this is never empty for a corpus that has " +
+        "any.",
       inputSchema: {},
       outputSchema: { areas: z.array(ReviewAreaSchema) },
       annotations: READ_ONLY_HINTS,
@@ -386,7 +399,11 @@ export function registerMetaTools(server: McpServer): void {
         "concise (default): each reference becomes a { type, id, label } stub; detail: 'full' " +
         "embeds the complete Regulation | Test | Check | Playbook record per reference " +
         "(record null if unresolved). Unknown ids return isError with a pointer — verify " +
-        "with search_playbooks or list_review_areas.",
+        "with search_playbooks or list_review_areas.\n" +
+        "Use this when you intend to FOLLOW the references. If the question is only what the " +
+        "steps are, get_playbook with detail: 'steps' answers it for roughly a fifth of the " +
+        "payload — a dense playbook resolves to ~90 stubs plus a regulatory_scope of a couple " +
+        "of hundred ids, none of which is the walkthrough.",
       inputSchema: {
         id: lenient(playbookIdSchema).describe("e.g. playbook://calibration/pd"),
         detail: detailSchema,
@@ -406,36 +423,53 @@ export function registerMetaTools(server: McpServer): void {
     {
       title: "Area overview",
       description:
-        "One-shot entry point for a review area. Returns { area, playbooks, regulation_ids, " +
-        "check_ids, test_ids } — the ReviewArea node, its playbooks expanded (reference stubs " +
-        "by default; detail: 'full' embeds complete records), and deduplicated flat id lists " +
-        "encountered across all phases. Unknown slugs return isError — call list_review_areas " +
-        "first to confirm the canonical slug.",
+        "One-shot entry point for a review area — prefer this over several search_* calls " +
+        "when the question is about a whole area. Returns { area, playbooks, regulation_ids, " +
+        "check_ids, test_ids, playbook_ids }: the ReviewArea node, its playbooks expanded " +
+        "(reference stubs by default; detail: 'full' embeds complete records), and " +
+        "deduplicated flat id lists encountered across all phases — playbook_ids being other " +
+        "playbooks referenced but not already listed, which is how a lifecycle playbook names " +
+        "the per-parameter ones. Asking for a top-level area includes everything in " +
+        "its subareas. Accepts the slug from list_review_areas ('pd-estimation', " +
+        "'credit-risk.irb-approach-governance-validation-and-lifecycle-management') OR the " +
+        "area name as spelled on a playbook record ('PD Estimation'). Unknown areas return " +
+        "isError — call list_review_areas for the canonical list.",
       inputSchema: {
-        area: lenient(z.string()).describe("Canonical area slug, e.g. 'calibration.pd'"),
+        area: lenient(z.string()).describe(
+          "Area slug or name, e.g. 'pd-estimation' or 'PD Estimation'",
+        ),
         detail: detailSchema,
       },
       annotations: READ_ONLY_HINTS,
     },
     async ({ area, detail }) => {
       const allAreas = await adapters.meta.taxonomy();
-      const areaNode = allAreas.find((a) => a.id === area);
+      // Resolution and the playbook filter both go through src/areas.ts, so a
+      // slug and the prose it was derived from can never disagree. This filter
+      // used to compare `p.area === area` — a slug against free-form prose —
+      // which could not match whatever the taxonomy contained.
+      const areaNode = resolveArea(allAreas, area);
       if (areaNode === undefined) {
-        return miss(`Unknown review area '${area}'. Call list_review_areas for the canonical slugs.`);
+        return miss(
+          `Unknown review area '${area}'. Call list_review_areas for the canonical list — ` +
+            "it accepts either a slug or an area name as spelled on a playbook.",
+        );
       }
 
       const allPlaybooks = await adapters.playbook.list();
-      const areaPlaybooks = allPlaybooks.filter(
-        (p) => p.area === area || (p.subarea !== undefined && `${p.area}.${p.subarea}` === area),
-      );
+      const areaPlaybooks = allPlaybooks.filter((p) => playbookInArea(p, areaNode));
       const expanded = await Promise.all(areaPlaybooks.map(expandPlaybook));
 
       const seenReg = new Set<RegulationId>();
       const seenCheck = new Set<CheckId>();
       const seenTest = new Set<TestId>();
+      // The area's own playbooks are already in `playbooks`; only referenced
+      // ones are worth listing, so they seed the seen-set rather than the list.
+      const seenPlaybook = new Set<PlaybookId>(areaPlaybooks.map((p) => p.id));
       const regulation_ids: RegulationId[] = [];
       const check_ids: CheckId[] = [];
       const test_ids: TestId[] = [];
+      const playbook_ids: PlaybookId[] = [];
 
       for (const pb of expanded) {
         for (const ph of pb.phases) {
@@ -443,11 +477,19 @@ export function registerMetaTools(server: McpServer): void {
             if (ref.type === "regulation" && !seenReg.has(ref.id)) { seenReg.add(ref.id); regulation_ids.push(ref.id); }
             if (ref.type === "check" && !seenCheck.has(ref.id)) { seenCheck.add(ref.id); check_ids.push(ref.id); }
             if (ref.type === "test" && !seenTest.has(ref.id)) { seenTest.add(ref.id); test_ids.push(ref.id); }
+            if (ref.type === "playbook" && !seenPlaybook.has(ref.id)) { seenPlaybook.add(ref.id); playbook_ids.push(ref.id); }
           }
         }
       }
       const playbooks = detail === "full" ? expanded : expanded.map(toConcisePlaybook);
-      return ok({ area: areaNode, playbooks, regulation_ids, check_ids, test_ids } satisfies AreaOverview);
+      return ok({
+        area: areaNode,
+        playbooks,
+        regulation_ids,
+        check_ids,
+        test_ids,
+        playbook_ids,
+      } satisfies AreaOverview);
     },
   );
 

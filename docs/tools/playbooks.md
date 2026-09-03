@@ -40,8 +40,27 @@ Fetch a playbook by ID.
 | Parameter | Type | Notes |
 |---|---|---|
 | `id` | `PlaybookId` | e.g. `playbook://calibration/pd` |
+| `detail` | `"full" \| "steps"` | Optional, default `"full"` — `"steps"` replaces each phase's `references` array with its count, and `regulatory_scope` with its size |
 
-**Returns:** `Playbook` — unknown ids are an `isError` result pointing at `search_playbooks`.
+**Returns:** `Playbook` (default), or the steps-only projection below — unknown ids are an `isError` result pointing at `search_playbooks`.
+
+Reach for `detail: "steps"` when the question is what the steps *are*. A dense
+playbook carries ~90 reference URIs across its phases plus a `regulatory_scope`
+of a couple of hundred more; on the real corpus that is 11.7 kB, against 3.2 kB
+for the same walkthrough in steps form. Use `expand_playbook` instead when you
+intend to *follow* the references.
+
+```ts
+type StepsOnlyPlaybook = {
+  id: PlaybookId;
+  area: string;
+  subarea?: string;
+  phases: Array<{ name: string; description: string; reference_count: number }>;
+  gates: string[];
+  regulatory_scope_count: number;
+  last_updated: string;
+}
+```
 
 ```ts
 type Playbook = {
