@@ -96,3 +96,26 @@ jobs:
 
             The bundle ships with empty adapters: it serves whatever corpus you point
             `CORPUS_FILE` at, and refuses to start on a corpus that fails validation.
+
+      # Consumers pin this server BY TAG, so a release reaches nobody until each
+      # of them moves its pin. Rather than have a human remember, tell them.
+      #
+      # This is a convenience, never a gate: it self-skips while the secret is
+      # unset (the default GITHUB_TOKEN cannot reach another repository, so
+      # there is nothing to fall back on) and `continue-on-error` means a
+      # revoked or expired token can never turn a good release red. The
+      # dashboard also polls daily, so the worst case of this step failing is
+      # that the bump PR arrives in the morning instead of in a minute.
+      - name: Tell the consumers a release is out
+        if: steps.gate.outputs.publish == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.CONSUMER_DISPATCH_TOKEN }}
+          TAG: ${{ steps.gate.outputs.tag }}
+        run: |
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "No CONSUMER_DISPATCH_TOKEN — skipping. Consumers pick $TAG up on their own schedule."
+            exit 0
+          fi
+          jq -n --arg tag "$TAG" '{event_type: "mcp-released", client_payload: {tag: $tag}}' \
+            | gh api repos/rhozacc/prudent-dashboard/dispatches --input -
