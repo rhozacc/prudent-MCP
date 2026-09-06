@@ -1,0 +1,184 @@
+/**
+ * Eval harness — drives the REAL server over stdio and records what a consuming
+ * model actually receives.
+ *
+ * The unit of measurement is the **call trace**: for every tool call, the bytes
+ * and estimated tokens that land in the model's context, the latency, and
+ * whether the call errored. Everything in `invariants.ts` is expressed over
+ * traces, so a quality claim is always tied to an observation rather than to
+ * a reading of the source.
+ *
+ * Corpus-agnostic by construction: the harness spawns whatever CORPUS_FILE
+ * points at (the demo adapters when unset), so the same checks run in CI on the
+ * open-source demo corpus and locally against a real one. No corpus content
+ * lives here.
+ */
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+// ============================================================================
+// Token accounting
+// ============================================================================
+
+/**
+ * chars/4 — the standard rough proxy. JSON with many short keys tokenizes
+ * denser than prose, so this UNDER-states the true cost if anything; a budget
+ * that fails under this estimate fails harder in reality. Used for ranking and
+ * for budget assertions, never reported as an exact figure.
+ */
+export const estimateTokens = (s: string): number => Math.round(s.length / 4);
+
+// ============================================================================
+// Traces
+// ============================================================================
+
+export interface CallTrace {
+  tool: string;
+  args: Record<string, unknown>;
+  /** Concatenated text content — exactly what reaches the model's context. */
+  text: string;
+  chars: number;
+  tokens: number;
+  ms: number;
+  isError: boolean;
+  /** Parsed body when the content is valid JSON; null when it is not. */
+  json: unknown | null;
+}
+
+export interface ToolCard {
+  name: string;
+  description: string;
+  schemaChars: number;
+  /** Standing cost of publishing this tool, paid on every request. */
+  tokens: number;
+}
+
+export interface Session {
+  tools: ToolCard[];
+  /** Standing context cost of connecting the server, before any call. */
+  surfaceTokens: number;
+  call(tool: string, args?: Record<string, unknown>): Promise<CallTrace>;
+  traces: CallTrace[];
+  close(): Promise<void>;
+}
+
+// ============================================================================
+// Session
+// ============================================================================
+
+export interface OpenOptions {
+  /** Path to a corpus JSON file. Omitted → the seeded in-memory demo. */
+  corpusFile?: string;
+  /** Server entry point; defaults by whether a corpus file was given. */
+  entry?: string;
+  command?: string;
+}
+
+/**
+ * With no corpus file the default entry is the **seeded demo**, not the MCPB
+ * entry: the MCPB entry with no CORPUS_FILE serves empty adapters, against
+ * which every invariant has nothing to bind and the suite passes without
+ * measuring anything. Defaulting to a seeded server keeps CI honest.
+ */
+export async function openSession(opts: OpenOptions = {}): Promise<Session> {
+  const fallback =
+    opts.corpusFile === undefined ? "../examples/inmemory-demo.ts" : "../src/mcpb-entry.ts";
+  const entry = opts.entry ?? new URL(fallback, import.meta.url).pathname;
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
+  if (opts.corpusFile !== undefined) env["CORPUS_FILE"] = opts.corpusFile;
+
+  const transport = new StdioClientTransport({
+    command: opts.command ?? "bun",
+    args: [entry],
+    env,
+  });
+  const client = new Client({ name: "prudent-evals", version: "0" }, { capabilities: {} });
+  await client.connect(transport);
+
+  const listed = await client.listTools();
+  const tools: ToolCard[] = listed.tools.map((t) => {
+    const description = t.description ?? "";
+    const schemaChars = JSON.stringify(t.inputSchema).length;
+    return {
+      name: t.name,
+      description,
+      schemaChars,
+      tokens: estimateTokens("x".repeat(t.name.length + description.length + schemaChars)),
+    };
+  });
+  const surfaceTokens = tools.reduce((n, t) => n + t.tokens, 0);
+
+  const traces: CallTrace[] = [];
+
+  const call = async (tool: string, args: Record<string, unknown> = {}): Promise<CallTrace> => {
+    const t0 = performance.now();
+    let text = "";
+    let isError = false;
+    try {
+      const r = (await client.callTool({ name: tool, arguments: args })) as {
+        content?: Array<{ type: string; text?: string }>;
+        isError?: boolean;
+      };
+      text = (r.content ?? []).map((c) => c.text ?? "").join("");
+      isError = r.isError === true;
+    } catch (e) {
+      // A protocol-level rejection (bad arguments) is a real thing a model does;
+      // record it as an errored trace rather than throwing the run away.
+      text = e instanceof Error ? e.message : String(e);
+      isError = true;
+    }
+    let json: unknown | null = null;
+    try {
+      json = JSON.parse(text) as unknown;
+    } catch {
+      json = null;
+    }
+    const trace: CallTrace = {
+      tool,
+      args,
+      text,
+      chars: text.length,
+      tokens: estimateTokens(text),
+      ms: Math.round(performance.now() - t0),
+      isError,
+      json,
+    };
+    traces.push(trace);
+    return trace;
+  };
+
+  return {
+    tools,
+    surfaceTokens,
+    call,
+    traces,
+    close: () => client.close(),
+  };
+}
+
+// ============================================================================
+// Findings
+// ============================================================================
+
+export type Severity = "fatal" | "warn" | "info";
+
+export interface Finding {
+  id: string;
+  severity: Severity;
+  /** One sentence: what is wrong, in terms of what a model would believe. */
+  summary: string;
+  /** The observation that proves it — a value, not a re-assertion. */
+  evidence: string[];
+}
+
+export interface InvariantResult {
+  id: string;
+  title: string;
+  /** false when the invariant could not bind — reported, never silently passed. */
+  applicable: boolean;
+  findings: Finding[];
+}
+
+export const passed = (r: InvariantResult): boolean =>
+  r.applicable && r.findings.every((f) => f.severity !== "fatal");
