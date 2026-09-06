@@ -30,7 +30,9 @@
     "build:mcpb": "bun run scripts/build-mcpb.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "evals": "bun run evals/run.ts",
+    "evals:call": "bun run evals/call.ts"
   },
   "engines": {
     "bun": ">=1.1.0"
