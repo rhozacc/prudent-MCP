@@ -1,4 +1,4 @@
-# Claude Code: prudent-mcp v0.5
+# Claude Code: prudent-mcp v0.7
 
 This file is the working brief when extending the codebase. For human onboarding read `README.md` and `docs/corpus/index.md` first.
 

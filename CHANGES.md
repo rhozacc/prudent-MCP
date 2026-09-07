@@ -2,6 +2,15 @@
 
 ## Honest envelopes, precise ranking, and a resolver that declines
 
+**0.7.0.** Four things break for a programmatic consumer, none for a corpus file:
+
+- `MetaAdapter.resolveCitation` returns `CitationResolution`, not `Regulation | null`. An adapter implementation must widen; `resolveCitationIn` is kept as a shim returning `.match` for callers of that export.
+- `Referrers` gains `primary: { tests, checks }`. Stored data still parses (it is defaulted), but a constructed `Referrers` literal must now include it.
+- `get_area_overview`'s default playbook shape carries `reference_counts` per phase instead of `references`. The ids are unchanged and still in the response's flat lists; `expand_playbook` gives the per-phase breakdown.
+- Tool response TEXT is compact JSON rather than indented. `structuredContent` is unchanged, so anything reading that is unaffected.
+
+A corpus written for 0.6.0 loads unchanged: every new record field is optional, and the linter's one new rule (URI-safe ids) rejects only ids no consumer could use anyway.
+
 Everything here was found by *measuring* what the server hands a model, not by reading the source. `evals/` drives the real server over stdio and records the **call trace** of every call — the bytes that land in the model's context, the latency, the error flag — and expresses each invariant over traces, so a claim is tied to an observation. Against the shipped corpus the suite opened at 17 fatal findings. The audience framing went with them: this is a regulatory knowledge layer for anyone whose model has to reason about IRB credit risk — analyst, validator, supervisor, auditor, developer — not a validator's tool.
 
 - **`total_matches` was a page size wearing a total's name** — `rankedSearch` sliced to 20 before `paginate` counted, so every query on every surface reported at most 20 matches. On the production corpus a query matching 611 regulations answered `total_matches: 20`, and the natural way to check that (ask for `offset: 20`) came back empty, which reads as confirmation that everything has been seen. Ranking now returns everything it ranked and the tool layer pages; `total_matches` is the size of the match set. The envelope also gains `returned` and `next_offset`, so "rows in this page" and "rows in the answer" can no longer be confused. **A model that believes it has seen every match stops looking** — this was the worst of the seventeen.
