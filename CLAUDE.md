@@ -51,7 +51,7 @@ Every tool, resource, and prompt has a description, a zod input schema, and a ha
 
 Bun. TypeScript strict. `@modelcontextprotocol/sdk` (TS-first). zod for runtime validation, template literal types (`type RegulationId = `regulation://${string}``) for compile-time URI segregation.
 
-`bun run typecheck`, `bun test`, `bun run inspect:demo`, `bun run schemas`, `bun run validate`, `bun run graph`, `bun run build:mcpb`. No `tsc` build step for local dev.
+`bun run typecheck`, `bun test`, `bun run inspect:demo`, `bun run schemas`, `bun run validate`, `bun run graph`, `bun run evals`, `bun run build:mcpb`. `bun run test:ci` runs typecheck + tests + linter + **evals** — the context-quality suite is a gate now, not a report, so a fatal finding fails the build. No `tsc` build step for local dev.
 
 ## What to do when extending
 
