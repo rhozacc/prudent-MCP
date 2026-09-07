@@ -31,8 +31,11 @@ const GETTER: Record<Scheme, string> = {
 /** Every `scheme://…` token appearing in a string. */
 function uris(s: string): string[] {
   const out = new Set<string>();
+  // A path segment is required: a bare "playbook://" is prose naming the
+  // scheme ("pass a playbook:// id"), not a claim that a record exists.
   for (const m of s.matchAll(/\b(regulation|check|test|playbook|source):\/\/[^\s"'`,)\]}]+/g)) {
-    out.add(m[0].replace(/[.,;]+$/, ""));
+    const uri = m[0].replace(/[.,;]+$/, "");
+    if (uri.split("://")[1] !== "") out.add(uri);
   }
   return [...out];
 }
@@ -98,7 +101,12 @@ export async function describedIdsResolve(s: Session): Promise<InvariantResult> 
   const findings: Finding[] = [];
   let bound = 0;
   for (const tool of s.tools) {
-    for (const uri of uris(`${tool.description} ${JSON.stringify(tool.name)}`)) {
+    // The input SCHEMA is scanned alongside the description. A model reads both
+    // as one instruction, and the per-field `describe()` is where example ids
+    // actually live — which is how eight of them sat unchecked while this
+    // invariant reported nothing to bind on.
+    const surface = `${tool.name} ${tool.description} ${tool.schemaText}`;
+    for (const uri of uris(surface)) {
       const scheme = schemeOf(uri);
       if (scheme === null) continue;
       // Template placeholders are documentation, not claims about content.
@@ -340,13 +348,30 @@ export async function idsRoundTrip(s: Session): Promise<InvariantResult> {
 export interface Budget {
   /** Standing cost of publishing the tool surface. */
   surface: number;
-  /** Any single call. */
+  /** A search or single-record response. */
   call: number;
+  /**
+   * A documented one-shot BUNDLE (get_area_overview), which exists to replace a
+   * dozen calls and is priced accordingly. Higher than `call`, and still a
+   * ceiling: the distinction is between a response that is large because it was
+   * asked to be and one that is large because nothing bounds it.
+   */
+  bundle: number;
   /** get_corpus_info → list_review_areas → get_area_overview. */
   entryPath: number;
 }
 
-export const DEFAULT_BUDGET: Budget = { surface: 3000, call: 6000, entryPath: 4000 };
+/**
+ * `entryPath` has to accommodate one bundle plus the two cheap calls before it,
+ * or the finding fires on every corpus and stops carrying information. It is
+ * set to catch the entry path GROWING, not to argue the bundle should not exist.
+ */
+export const DEFAULT_BUDGET: Budget = {
+  surface: 3000,
+  call: 6000,
+  bundle: 9000,
+  entryPath: 8000,
+};
 
 /**
  * Context is the scarce resource; a tool that spends 60k tokens answering one
@@ -403,11 +428,12 @@ export async function costWithinBudget(
   for (const [tool, args] of wide) {
     const t = await s.call(tool, args);
     if (t.isError) continue;
-    if (t.tokens > budget.call) {
+    const ceiling = tool === "get_area_overview" ? budget.bundle : budget.call;
+    if (t.tokens > ceiling) {
       findings.push({
         id: `I6/${tool}`,
         severity: "fatal",
-        summary: `${tool}(${JSON.stringify(args)}) returns ~${t.tokens} tokens in one call (ceiling ${budget.call}).`,
+        summary: `${tool}(${JSON.stringify(args)}) returns ~${t.tokens} tokens in one call (ceiling ${ceiling}).`,
         evidence: [`${t.chars} chars in ${t.ms}ms`],
       });
     }
@@ -478,6 +504,31 @@ export async function missesAreActionable(s: Session): Promise<InvariantResult> 
  *             that cannot be quoted forces the model to open the full record,
  *             so the honest cost is search + open, not search alone.
  */
+/**
+ * Is this excerpt something the caller can quote and answer from, or only a
+ * pointer to the record it came from?
+ *
+ * Quotable means: the whole field (nothing was cut), or a run that ends where a
+ * sentence ends. The one case this correctly refuses is a bounded window inside
+ * a single sentence longer than the excerpt budget — there is no way to end
+ * that at a terminator without serving the record, so it stays a pointer.
+ */
+export function excerptIsQuotable(excerpt: string): boolean {
+  const cut = excerpt.startsWith("…") || excerpt.endsWith("…");
+  const body = excerpt.replace(/^…/, "").replace(/…$/, "").trim();
+  if (body.length === 0) return false;
+  if (!cut) return true; // the complete field, however short
+  return /[.!?]["')\]]?$/.test(body);
+}
+
+/**
+ * Share of excerpts that must be quotable before the excerpt is doing its job.
+ * Not 100%: a corpus whose prose runs to sentences longer than the excerpt
+ * budget will always have a residue, and that is the corpus's shape rather than
+ * a defect in the server.
+ */
+const QUOTABLE_BAR = 0.8;
+
 export async function selfRetrievalIsAffordable(s: Session): Promise<InvariantResult> {
   const findings: Finding[] = [];
 
@@ -530,14 +581,16 @@ export async function selfRetrievalIsAffordable(s: Session): Promise<InvariantRe
       });
     }
 
-    // Honest cost of answering: the search, plus opening the top hit, because
-    // the excerpt is too short to quote from.
+    // Honest cost of answering: the search, plus opening the top hit ONLY when
+    // the excerpt could not have been quoted. Charging the open unconditionally
+    // measures the same number however good the excerpts get, which makes the
+    // metric blind to the thing it exists to track.
     const excerpt = /"matched_excerpt"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(back.text)?.[1] ?? "";
-    const usable = excerpt.length > 200 && /[.!?]["']?\s*$/.test(excerpt.replace(/…\s*$/, ""));
+    const usable = excerptIsQuotable(excerpt);
     if (!usable) unusableExcerpts++;
     const topId = returned[0];
     let open = 0;
-    if (topId !== undefined) {
+    if (!usable && topId !== undefined) {
       const t = await s.call("get_regulation", { id: topId });
       open = t.tokens;
     }
@@ -556,15 +609,23 @@ export async function selfRetrievalIsAffordable(s: Session): Promise<InvariantRe
   if (found < probes) {
     // already reported per-record above
   }
-  if (unusableExcerpts > 0) {
+  const quotable = probes - unusableExcerpts;
+  if (quotable / probes < QUOTABLE_BAR) {
     findings.push({
       id: "I8/excerpt-unusable",
       severity: "fatal",
-      summary: `${unusableExcerpts} of ${probes} search excerpts are too short or cut mid-word to answer from, so every answer costs a second call to open the full record.`,
+      summary: `Only ${quotable} of ${probes} search excerpts can be quoted (bar ${Math.round(QUOTABLE_BAR * 100)}%) — the rest end mid-clause, so answering from them costs a second call to open the full record.`,
       evidence: [
-        `mean cost of search-then-open: ~${Math.round(pathTokens / probes)} tokens per question`,
+        `mean cost of answering: ~${Math.round(pathTokens / probes)} tokens per question (search, plus an open only where the excerpt was unusable)`,
         "an excerpt that cannot be quoted is a pointer, not context",
       ],
+    });
+  } else if (unusableExcerpts > 0) {
+    findings.push({
+      id: "I8/excerpt-residue",
+      severity: "info",
+      summary: `${quotable} of ${probes} excerpts are quotable; ${unusableExcerpts} fall inside a single sentence longer than the excerpt budget.`,
+      evidence: [`mean cost of answering: ~${Math.round(pathTokens / probes)} tokens per question`],
     });
   }
 

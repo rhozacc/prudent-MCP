@@ -700,3 +700,162 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
 ```
 
 </details>
+
+<details>
+<summary><code>CitationResolution</code></summary>
+
+```json
+{
+  "$ref": "#/definitions/CitationResolution",
+  "definitions": {
+    "CitationResolution": {
+      "type": "object",
+      "properties": {
+        "match": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^regulation:\\/\\/.+"
+                },
+                "framework": {
+                  "type": "string"
+                },
+                "document_id": {
+                  "type": "string"
+                },
+                "document_version": {
+                  "type": "string"
+                },
+                "citation": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "commentary": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "last_updated": {
+                        "type": "string",
+                        "format": "date"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "default": []
+                },
+                "parent": {
+                  "type": "string",
+                  "pattern": "^regulation:\\/\\/.+"
+                },
+                "children": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^regulation:\\/\\/.+"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^test:\\/\\/.+"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^check:\\/\\/.+"
+                      }
+                    ]
+                  },
+                  "default": []
+                }
+              },
+              "required": [
+                "id",
+                "framework",
+                "document_id",
+                "document_version",
+                "citation",
+                "text"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "segment",
+            "none"
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^regulation:\\/\\/.+"
+              },
+              "citation": {
+                "type": "string"
+              },
+              "document_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "citation",
+              "document_id"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "ambiguous": {
+          "type": "boolean",
+          "default": false
+        },
+        "unmatched_segments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "coverage_note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "match",
+        "confidence"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
+```
+
+</details>

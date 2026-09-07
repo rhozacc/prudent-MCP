@@ -15,6 +15,7 @@
 import type {
   Check,
   CheckId,
+  CitationResolution,
   CorpusInfo,
   Playbook,
   PlaybookId,
@@ -93,7 +94,14 @@ export interface SourceAdapter {
 export interface MetaAdapter {
   info(): Promise<CorpusInfo>;
   referrers(id: string): Promise<Referrers>;
-  resolveCitation(text: string): Promise<Regulation | null>;
+  /**
+   * Loose citation → a resolution that can decline. Returns the whole
+   * CitationResolution, not just the match: a bare `Regulation | null` cannot
+   * express "several records are equally good" or "that instrument is not in
+   * this corpus", so the adapter had to pick one silently, and the consumer
+   * printed the guess as a citation.
+   */
+  resolveCitation(text: string): Promise<CitationResolution>;
   taxonomy(): Promise<ReviewArea[]>;
 }
 
@@ -140,7 +148,15 @@ const emptyMeta: MetaAdapter = {
   async referrers() {
     return { regulation: [], tests: [], checks: [], playbooks: [] };
   },
-  async resolveCitation() { return null; },
+  async resolveCitation() {
+    return {
+      match: null,
+      confidence: "none" as const,
+      candidates: [],
+      ambiguous: false,
+      unmatched_segments: [],
+    };
+  },
   async taxonomy() { return []; },
 };
 

@@ -48,6 +48,12 @@ export interface CallTrace {
 export interface ToolCard {
   name: string;
   description: string;
+  /**
+   * The serialized input schema. Kept, not just measured: per-field
+   * `describe()` text is part of what the model is told, so anything asserted
+   * about a tool's description has to be asserted about this too.
+   */
+  schemaText: string;
   schemaChars: number;
   /** Standing cost of publishing this tool, paid on every request. */
   tokens: number;
@@ -99,10 +105,12 @@ export async function openSession(opts: OpenOptions = {}): Promise<Session> {
   const listed = await client.listTools();
   const tools: ToolCard[] = listed.tools.map((t) => {
     const description = t.description ?? "";
-    const schemaChars = JSON.stringify(t.inputSchema).length;
+    const schemaText = JSON.stringify(t.inputSchema);
+    const schemaChars = schemaText.length;
     return {
       name: t.name,
       description,
+      schemaText,
       schemaChars,
       tokens: estimateTokens("x".repeat(t.name.length + description.length + schemaChars)),
     };

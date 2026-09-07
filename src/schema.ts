@@ -173,6 +173,37 @@ export const CorpusInfoSchema = z.object({
 });
 export type CorpusInfo = z.infer<typeof CorpusInfoSchema>;
 
+export const CitationCandidateSchema = z.object({
+  id: regulationIdSchema,
+  citation: z.string(),
+  document_id: z.string(),
+});
+export type CitationCandidate = z.infer<typeof CitationCandidateSchema>;
+
+// What a loose citation resolved to, and how sure the resolver is.
+//
+// `match` alone cannot carry the answer "I found something numbered like that
+// in a different instrument", which is the resolver's worst failure mode: the
+// consumer prints it as a citation. So confidence, the candidate set, and the
+// segments that went unplaced travel with the match, and a citation the corpus
+// cannot place resolves to null WITH a coverage_note rather than to a
+// same-numbered provision from another document.
+export const CitationResolutionSchema = z.object({
+  match: RegulationSchema.nullable(),
+  confidence: z.enum(["exact", "segment", "none"]),
+  // Every equally good match when the citation is ambiguous across documents.
+  // Non-empty ⇒ match is null: picking one silently is the defect.
+  candidates: z.array(CitationCandidateSchema).default([]),
+  ambiguous: z.boolean().default(false),
+  // Citation segments the resolver could not place — a dropped "(1)(a)" shows
+  // here instead of being silently ignored.
+  unmatched_segments: z.array(z.string()).default([]),
+  // Why nothing was returned, when the reason is corpus coverage rather than a
+  // malformed citation.
+  coverage_note: z.string().optional(),
+});
+export type CitationResolution = z.infer<typeof CitationResolutionSchema>;
+
 export const ReviewAreaSchema = z.object({
   id: z.string(),                        // e.g. "calibration.lgd"
   name: z.string(),

@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { adapters } from "../adapters.ts";
+import type { Regulation } from "../schema.ts";
 import { RegulationSchema, regulationIdSchema } from "../schema.ts";
 import { rankedSearch, regulationSearchFields } from "../search.ts";
 import {
@@ -27,6 +28,34 @@ const ConciseRegulationHit = z.object({
   parent: regulationIdSchema.optional(),
 });
 
+/**
+ * Commentary a `detail: 'full'` search row carries before it starts crowding out
+ * the answer.
+ *
+ * `Regulation.commentary` is unbounded by design — impact assessments and
+ * consultation feedback attach to section records, and a handful of them carry
+ * 40-56 entries. One such record serialized to 33,000 characters, so a single
+ * row of a twenty-row page could not fit any sane response budget, and the
+ * caller who asked for "full records" got one record and a notice.
+ *
+ * A search row's job is to let the caller decide what to open. So the record is
+ * served whole except that commentary is capped, and `commentary_omitted` says
+ * exactly how much was withheld and implies where to get it. Nothing served is
+ * abridged: get_regulation on the id still returns every entry.
+ */
+const MAX_SEARCH_COMMENTARY = 3;
+
+type FullRegulationRow = Regulation & { commentary_omitted?: number };
+
+function capCommentary(r: Regulation): FullRegulationRow {
+  if (r.commentary.length <= MAX_SEARCH_COMMENTARY) return r;
+  return {
+    ...r,
+    commentary: r.commentary.slice(0, MAX_SEARCH_COMMENTARY),
+    commentary_omitted: r.commentary.length - MAX_SEARCH_COMMENTARY,
+  };
+}
+
 export function registerRegulationTools(server: McpServer): void {
   server.registerTool(
     "search_regulation",
@@ -34,17 +63,32 @@ export function registerRegulationTools(server: McpServer): void {
       title: "Search regulation",
       description:
         "Ranked, field-scoped search over regulation citation, text, and commentary " +
-        "(record ids join in only for URI-like queries). Returns { results, total_matches, " +
-        "offset, truncated }; concise results (default) are { id, citation, matched_excerpt, " +
-        "document_id, parent } — pass detail: 'full' for complete records. Latest versions only. " +
-        "Follow up with get_regulation (as_of for history) or get_referrers on any id.",
+        "(record ids join in only for URI-like queries). Returns { results, returned, " +
+        "total_matches, offset, truncated, next_offset, notice }; total_matches is the whole " +
+        "match set, not this page. Concise results (default) are { id, citation, " +
+        "matched_excerpt, document_id, parent }, the excerpt being whole sentences around the " +
+        "match — quotable as it stands. detail: 'full' gives complete records with commentary " +
+        "capped (commentary_omitted says how many were left out; get_regulation serves them " +
+        "all). Latest versions only. Follow up with get_regulation (as_of for history) or " +
+        "get_referrers on any id.",
       inputSchema: searchInputShape("citation, text, and commentary"),
-      outputSchema: searchOutputShape(z.union([ConciseRegulationHit, RegulationSchema])),
+      outputSchema: searchOutputShape(
+        z.union([
+          ConciseRegulationHit,
+          RegulationSchema.extend({
+            commentary_omitted: z
+              .number()
+              .int()
+              .optional()
+              .describe("Commentary entries withheld from this search row; get_regulation serves all of them."),
+          }),
+        ]),
+      ),
       annotations: READ_ONLY_HINTS,
     },
     async ({ query, limit, offset, detail }) => {
       const records = await adapters.regulation.search(query);
-      if (detail === "full") return searchResult(paginate(records, limit, offset));
+      if (detail === "full") return searchResult(paginate(records.map(capCommentary), limit, offset));
       // The adapter interface returns records only — recompute matches locally
       // (cheap at result sizes) to attach the excerpt to each concise hit.
       const matches = rankedSearch(records, query, regulationSearchFields(query), records.length);
@@ -75,7 +119,9 @@ export function registerRegulationTools(server: McpServer): void {
         "recorded version is a miss, never current text as historical. Unknown ids return " +
         "isError with a pointer. Use get_referrers to find operationalising checks/playbooks.",
       inputSchema: {
-        id: lenient(regulationIdSchema).describe("e.g. regulation://crr/178/1/a"),
+        id: lenient(regulationIdSchema).describe(
+          "A regulation id from search_regulation or resolve_citation — shape regulation://{document}/{provision}",
+        ),
         as_of: z.string().date().optional().describe("ISO date, e.g. 2019-03-01"),
       },
       outputSchema: RegulationSchema,

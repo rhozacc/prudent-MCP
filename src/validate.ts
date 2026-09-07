@@ -28,6 +28,9 @@
  *   6. Verbatim invariant — no HTML markup in the fields whose promise is
  *      reproduction of the source document (the covered set, and the reasons
  *      for the exclusions, are enumerated above `validateCorpus`).
+ *   7. URI-safe ids — no character that a URI stops at when written into
+ *      ordinary prose, because an id is copied out of one response and pasted
+ *      into the next call.
  *
  * Staleness (a current source whose `verified` is older than
  * STALE_AFTER_DAYS) is advisory, not fatal — see `corpusWarnings`.
@@ -293,6 +296,34 @@ export function validateCorpus(corpus: CorpusInput, now: Date = new Date()): str
   }
   for (const c of checks) verbatim(c.id, "expectation", c.expectation);
   for (const t of tests) verbatim(t.id, "acceptance_criteria", t.acceptance_criteria);
+
+  // 7 — ids must survive being written down.
+  //
+  // A record id is not only a key: it is copied out of one response and pasted
+  // into the next call, usually by a model reproducing it inside prose. Any
+  // character that terminates a URI in ordinary text — a bracket, a quote, a
+  // trailing "+" — gets eaten on the way, and the id that comes back is a
+  // truncated one that resolves to nothing. Observed live: an id ending in
+  // "(part2)" reached get_check as "…/2(part2", which reads to the caller as
+  // "that record does not exist".
+  //
+  // Fatal rather than advisory: the corpus decides its own ids, so this is
+  // always fixable at the source, and the failure it causes is silent.
+  const UNSAFE_ID_CHARS = /[^A-Za-z0-9:/._-]/g;
+  const idSafe = (id: string): void => {
+    const bad = [...new Set(id.match(UNSAFE_ID_CHARS) ?? [])];
+    if (bad.length > 0) {
+      errors.push(
+        `${id}: id contains ${bad.map((c) => `'${c}'`).join(", ")} — ids must use only ` +
+          "letters, digits and : / . _ - so they survive being quoted in prose (URI-safe id)",
+      );
+    }
+  };
+  for (const reg of regs) idSafe(reg.id);
+  for (const t of tests) idSafe(t.id);
+  for (const c of checks) idSafe(c.id);
+  for (const p of playbooks) idSafe(p.id);
+  for (const s of sources) idSafe(s.id);
 
   return [...new Set(errors)];
 }

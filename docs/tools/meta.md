@@ -75,31 +75,56 @@ get_referrers("regulation://crr/180/1/a")
 
 ## `resolve_citation`
 
-Loose, human-prose citation string → structured Regulation record. Deterministic matching in three passes: exact normalized-citation equality (lowercased, punctuation stripped, abbreviations expanded — `art` → `article`, `para` → `paragraph`, `gl` → `guidelines`), then normalized-citation containment in either direction (a citation naming a missing node resolves to the closest recorded relative), then article/paragraph/point segment extraction against id paths, filtered by a framework token when the query names one.
+Loose, human-prose citation string → the Regulation record it names, **or an honest refusal**. Matching is exact and there is no fuzzy fallback, because a confident wrong citation is the worst thing this server can produce — the consumer prints it as a citation.
+
+Passes, in order, and nothing below them:
+
+1. **Instrument gate.** A citation naming an instrument the corpus does not hold (`CRR`, `CRD`, `Regulation (EU) No 9999/9999`) resolves to `match: null` with a `coverage_note`, rather than into another document that happens to share a number. A wrong instrument is not a near miss; it is a different body of law.
+2. **Exact citation equality** — lowercased, punctuation stripped, abbreviations expanded (`art` → `article`, `para` → `paragraph`, `gl` → `guidelines`), with the document's own name removed from both sides so `Art. 180` matches a record whose citation reads `CRR Article 180`.
+3. **Exact numeric-spine equality**, scoped to the document the citation names. The spine is the article/paragraph/point numbers with structural words dropped, so `Chapter 5, paragraph 12`, `chapter 5 para 12` and `5.12` all compare equal — while `1218` is still not `121`, and `178` is not `178(1)(a)`. The document's own numbers are stripped first: `EBA GL 2017/16 paragraph 78` looks for provision 78, not for one numbered 2017.
+4. **Narrower relatives.** If the corpus holds provisions *under* the citation but not the node itself, they come back as `candidates` with `match` still `null` — "the corpus holds 178(1)(a) and 178(1)(b), but no Article 178" is useful; "Article 178 is 178(1)(a)" is false.
 
 **Inputs:**
 
 | Parameter | Type | Notes |
 |---|---|---|
-| `text` | `string` | A loose citation in analyst prose |
+| `text` | `string` | A loose citation in ordinary prose |
 
-**Returns:** `{ match: Regulation | null }` — on `null`, the result carries a hint to fall back to `search_regulation` with the citation's key words.
+**Returns:** `{ match, confidence, candidates, ambiguous, unmatched_segments, coverage_note }`
 
-**Example:**
+| Field | Meaning |
+|---|---|
+| `match` | The record, or `null`. **A null match is not a citation** — never present one as though the text were found. |
+| `confidence` | `"exact"` \| `"segment"` \| `"none"` — which pass matched |
+| `candidates` | `{ id, citation, document_id }` for every equally good match, or for the narrower relatives of a node the corpus lacks. Non-empty ⇒ `match` is `null`. |
+| `ambiguous` | `true` when several records fit and choosing one would have been a guess |
+| `unmatched_segments` | Citation numbers the resolver could not place — a dropped `(1)(a)` shows here instead of being ignored |
+| `coverage_note` | Why nothing was returned, in terms of what this corpus covers |
+
+**Example** (against a corpus holding CRR and EBA GL 2017/16):
 ```ts
 resolve_citation("Art. 178(1)(a)")
-→ { match: <regulation://crr/178/1/a> }
+→ { match: <regulation://crr/178/1/a>, confidence: "exact", candidates: [], ambiguous: false }
 
-resolve_citation("CRR Article 180")
-→ { match: <regulation://crr/180> }
-
-resolve_citation("EBA GL 2017/16 para 78")
-→ { match: <regulation://eba/gl-2017-16/78> }
-
-// Containment: no crr/178 record exists, so the closest recorded relative wins.
+// No crr/178 record exists. The relatives are reported; the match is not guessed.
 resolve_citation("CRR Article 178")
-→ { match: <regulation://crr/178/1/a> }
+→ { match: null, confidence: "none",
+    candidates: [<…/178/1/a>, <…/178/1/b>],
+    coverage_note: "No record is \"CRR Article 178\" itself. The corpus holds 2 narrower provisions under it…" }
+
+// The same number in two documents: reported, not resolved.
+resolve_citation("Article 78")
+→ { match: null, ambiguous: true, candidates: [<gl-2017-16/…>, <gl-2019-03/…>],
+    coverage_note: "\"Article 78\" matches 2 records across 2 document(s). Name the document to disambiguate…" }
+
+// An instrument this corpus does not hold.
+resolve_citation("Article 1 of Regulation (EU) No 9999/9999")
+→ { match: null, candidates: [],
+    coverage_note: "This corpus holds no Regulation (EU) No 9999/9999. Nothing was matched, rather than
+                    sourcing a same-numbered provision from another document…" }
 ```
+
+On any `null`, fall back to `search_regulation` with the citation's key words, or `get_corpus_info` for the documents actually loaded.
 
 ---
 
@@ -178,7 +203,7 @@ One-shot entry point for a review area. Combines `list_review_areas` + all match
 | Parameter | Type | Notes |
 |---|---|---|
 | `area` | `string` | Area slug (`"pd-estimation"`, `"calibration.pd"`) **or** the area name as spelled on a playbook record (`"PD Estimation"`) — call `list_review_areas` for the canonical list |
-| `detail` | `"concise" \| "full"` | Optional, default `"concise"` — reference stubs vs. embedded records in the expanded playbooks |
+| `detail` | `"concise" \| "full"` | Optional, default `"concise"` — walkthrough summary vs. embedded records. `"full"` falls back to the summary (with a `notice`) when it exceeds the per-response ceiling |
 
 **Returns:** `AreaOverview` — unknown areas are an `isError` result pointing at `list_review_areas`.
 
@@ -189,13 +214,21 @@ Asking for a top-level area includes everything in its subareas, so
 ```ts
 type AreaOverview = {
   area: ReviewArea;
-  playbooks: ExpandedPlaybook[];    // reference stubs by default; detail: "full" embeds records
+  playbooks: PlaybookWalkthrough[]; // phases + reference_counts; detail: "full" embeds records
   regulation_ids: RegulationId[];   // deduplicated across all phases
   check_ids: CheckId[];
   test_ids: TestId[];
   playbook_ids: PlaybookId[];       // other playbooks referenced, minus the ones above
 }
 ```
+
+By default a phase carries `reference_counts` rather than the reference stubs
+themselves. Every stub was also an entry in the flat id lists above it, at
+roughly twice the bytes — on a real area that duplication was 73% of the whole
+payload, the response spending a fifth of a working context restating what it
+had already said. Nothing became unreachable: the ids are in the flat lists, and
+[`expand_playbook`](#expand_playbook) resolves them per phase when the phase a
+reference belongs to is what matters.
 
 `playbook_ids` matters because some playbooks are indexes over others: a
 lifecycle playbook's phases reference the per-parameter playbooks and nothing
@@ -207,7 +240,10 @@ else, so an overview gathering only regulation/check/test ids would answer
 get_area_overview("calibration.pd")
 → {
     area: { id: "calibration.pd", name: "PD Calibration", ... },
-    playbooks: [ ... expanded playbook ... ],
+    playbooks: [{ id: "playbook://calibration/pd", area: "PD Calibration",
+                  phases: [{ name: "Scope the calibration sample", description: "…",
+                             reference_counts: { regulation: 4, check: 2, test: 3, playbook: 0 } }],
+                  gates: ["…"], last_updated: "2026-08-20" }],
     regulation_ids: ["regulation://crr/180/1/a", "regulation://eba/gl-2017-16/78"],
     check_ids:      ["check://calibration/pd/lra-derived", "check://calibration/pd/segment-tested"],
     test_ids:       ["test://jeffreys", "test://binomial", "test://hosmer-lemeshow"]

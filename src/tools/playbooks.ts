@@ -107,7 +107,9 @@ export function registerPlaybookTools(server: McpServer): void {
         "Unknown ids return isError with a pointer. Use expand_playbook instead when you " +
         "intend to FOLLOW the references, resolved in one call.",
       inputSchema: {
-        id: lenient(playbookIdSchema).describe("e.g. playbook://calibration/pd"),
+        id: lenient(playbookIdSchema).describe(
+          "A playbook id from search_playbooks or get_area_overview — shape playbook://{document}/{slug}",
+        ),
         detail: z
           .enum(["full", "steps"])
           .default("full")

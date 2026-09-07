@@ -1,6 +1,6 @@
 ---
 title: prudent-mcp
-titleTemplate: Structured regulatory knowledge for IRB model validation
+titleTemplate: Structured regulatory knowledge for IRB credit risk
 sidebar: false
 aside: false
 ---
@@ -10,10 +10,11 @@ aside: false
 # prudent-mcp
 
 <p class="page-sub">
-prudent-mcp serves a structured, typed knowledge base for IRB credit-risk model
-validation over the Model Context Protocol: regulation, statistical tests,
+prudent-mcp serves a structured, typed knowledge base for IRB credit-risk
+regulation over the Model Context Protocol: regulation, statistical tests,
 supervisor checks, review playbooks, and a registry of the source documents the
-corpus derives from. It is read-only by construction — the server describes;
+corpus derives from. Analyst, validator, supervisor, auditor or developer — the
+surface is the same. It is read-only by construction: the server describes;
 nothing executes and nothing mutates.
 </p>
 
@@ -59,12 +60,12 @@ Other hosts and manual JSON config: [Client integrations](/guide/clients).
 | [Guide](/guide/) | Introduction, domain concepts, quickstart, architecture, client wiring, FAQ |
 | [Tools](/tools/) | All 19 tools — arguments, return shapes, worked calls |
 | [Corpus structure](/corpus/) | URI schemes, record shapes, versioning, cross-reference rules |
-| [Schema reference](/corpus/schemas) | Generated field-level reference for all 11 schemas |
+| [Schema reference](/corpus/schemas) | Generated field-level reference for all 12 schemas |
 | [Corpus graph](/corpus/graph) | How the surfaces reference each other |
 | [Examples](/examples/) | End-to-end sessions against the demo corpus |
 
 The open-source server ships with empty adapters and a seeded in-memory demo — the
-schemas, tools, and validation machinery are all here under
+schemas, tools, and corpus linter are all here under
 [AGPL-3.0-only](https://github.com/rhozacc/prudent-mcp/blob/main/LICENSE), with a
 commercial licence available for embedding, OEM and on-prem. A corpus is
 what you bring: point `CORPUS_FILE` at your own, or write adapters against any
