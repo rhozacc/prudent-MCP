@@ -47,6 +47,13 @@ Add a function returning `InvariantResult` to `invariants.ts` and list it in `AL
 - Return `applicable: false` when there was nothing to bind on.
 - Severity is `fatal` for truthfulness, `warn` for cost, `info` for observations.
 
-## Not wired into `test:ci` yet
+## Wired into `test:ci`
 
-The suite currently fails against both corpora, which is the point — it was written to characterise v2 before v3. Wire it into `test:ci` once the fatal findings are closed, so it becomes a regression gate rather than a report.
+It opened at 17 fatal findings — it was written to characterise the server before fixing it — and is now **0 fatal against both the seeded demo and a real corpus**, so it runs in `test:ci` as a regression gate rather than a report. A fatal finding fails the build.
+
+Two invariants report `applicable: false` against the demo and that is the honest state, not a gap to paper over:
+
+- **I2** binds only when a tool description or input schema contains a literal id. There are none: every example is a template shape naming the tool that hands out real ids. If someone reintroduces a literal, I2 binds again and checks it — which is the point of the check.
+- **I3** needs article-numbered ids to derive a provably-absent article number from, and the demo seed has none. It binds against a real corpus. This is the case the two rules above exist for: a bar that only holds for one corpus is a fixture, so run the suite against the corpus you ship.
+
+The cost warning (`I6/surface`) stands deliberately. Nineteen tools cost ~4,700 tokens of standing context against a 3,000 budget, and the fix is not to cut the guidance — descriptions are how a model learns not to make the wrong call, and a wrong call costs more than the words that would have prevented it. Closing it properly means publishing fewer tools.

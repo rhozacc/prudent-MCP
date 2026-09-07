@@ -8,6 +8,8 @@
  */
 import {
   CheckSchema,
+  CitationResolutionSchema,
+  ExternalCitationSchema,
   CommentarySchema,
   CorpusInfoSchema,
   MilestoneSchema,
@@ -35,6 +37,8 @@ export const supportingSchemas = {
   ReviewArea: ReviewAreaSchema,
   CorpusInfo: CorpusInfoSchema,
   Referrers: ReferrersSchema,
+  CitationResolution: CitationResolutionSchema,
+  ExternalCitation: ExternalCitationSchema,
 } as const;
 
 export const schemaRegistry = { ...surfaceSchemas, ...supportingSchemas };

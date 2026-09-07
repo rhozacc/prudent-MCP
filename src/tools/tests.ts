@@ -64,7 +64,11 @@ export function registerTestTools(server: McpServer): void {
         "Use family to reason about whether a bank-specific variant is acceptable; " +
         "computation happens elsewhere — this server only describes. Unknown ids return " +
         "isError with a pointer. Use get_referrers to find playbooks referencing the test.",
-      inputSchema: { id: lenient(testIdSchema).describe("e.g. test://jeffreys") },
+      inputSchema: {
+        id: lenient(testIdSchema).describe(
+          "A test id from search_tests or a playbook reference — shape test://{document}/{slug}",
+        ),
+      },
       outputSchema: TestSchema,
       annotations: READ_ONLY_HINTS,
     },

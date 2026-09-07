@@ -63,7 +63,11 @@ export function registerCheckTools(server: McpServer): void {
         "pass/fail bar), derived_from (RegulationId[] this check operationalises), and " +
         "expected_evidence (artifacts the reviewer must gather). Unknown ids return isError " +
         "with a pointer. Use get_regulation on any derived_from id to read the underlying law.",
-      inputSchema: { id: lenient(checkIdSchema).describe("e.g. check://calibration/pd/lra-derived") },
+      inputSchema: {
+        id: lenient(checkIdSchema).describe(
+          "A check id from search_checks, get_area_overview or a playbook reference — shape check://{document}/{slug}",
+        ),
+      },
       outputSchema: CheckSchema,
       annotations: READ_ONLY_HINTS,
     },

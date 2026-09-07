@@ -65,7 +65,7 @@ export function registerResources(server: McpServer): void {
       title: "Regulation",
       description:
         "regulation://{framework}/{article}[/{paragraph}[/{point}]] — " +
-        "e.g. regulation://crr/178/1/a",
+        "regulation://{document}/{provision} — ids come from search_regulation",
     },
     async (uri, { path }) => {
       const id = `regulation://${String(path)}` as RegulationId;
@@ -93,7 +93,7 @@ export function registerResources(server: McpServer): void {
     }),
     {
       title: "Test",
-      description: "test://{family}/{test-id} — e.g. test://gl-2019-03/binomial",
+      description: "test://{document}/{slug} — ids come from search_tests",
     },
     async (uri, { path }) => {
       const fullId = `test://${String(path)}` as TestId;
@@ -115,7 +115,7 @@ export function registerResources(server: McpServer): void {
       title: "Check",
       description:
         "check://{area}/{topic}[/{specific}] — " +
-        "e.g. check://calibration/pd/lra-derived",
+        "check://{document}/{slug} — ids come from search_checks",
     },
     async (uri, { path }) => {
       const fullId = `check://${String(path)}` as CheckId;
@@ -135,7 +135,7 @@ export function registerResources(server: McpServer): void {
     }),
     {
       title: "Playbook",
-      description: "playbook://{area}[/{subarea}] — e.g. playbook://calibration/lra",
+      description: "playbook://{document}/{slug} — ids come from search_playbooks",
     },
     async (uri, { path }) => {
       const id = `playbook://${String(path)}` as PlaybookId;
@@ -156,7 +156,7 @@ export function registerResources(server: McpServer): void {
     {
       title: "Source",
       description:
-        "source://{framework}/{document-id} — e.g. source://eba/gl-2017-16",
+        "source://{framework}/{document-id} — ids come from list_sources",
     },
     async (uri, { path }) => {
       const id = `source://${String(path)}` as SourceId;

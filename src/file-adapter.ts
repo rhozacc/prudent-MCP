@@ -30,6 +30,8 @@ import {
 import type {
   Check,
   CheckId,
+  CitationCandidate,
+  CitationResolution,
   CorpusInfo,
   Playbook,
   PlaybookId,
@@ -107,81 +109,324 @@ function citationTokens(text: string): string[] {
     .map((t) => CITATION_EXPANSIONS[t] ?? t);
 }
 
-const normalizeCitation = (text: string): string => citationTokens(text).join("");
+/**
+ * Structural words: they say what KIND of node a citation names, not which one.
+ * Dropped when comparing the numeric spine so "Chapter 5, paragraph 12",
+ * "chapter 5 para 12" and "5.12" compare equal.
+ */
+const STRUCTURAL = new Set([
+  "article", "articles", "paragraph", "paragraphs", "point", "points", "section", "sections",
+  "chapter", "chapters", "annex", "annexes", "subparagraph", "letter", "recital", "part", "title",
+  "guidelines", "guideline", "guide", "no", "of", "the", "in", "and", "on", "at", "under",
+]);
 
-/** Path segments of a regulation id after the framework, lowercased. */
-function idSegments(id: RegulationId): string[] {
-  return id
-    .slice("regulation://".length)
-    .split("/")
-    .slice(1)
-    .map((s) => s.toLowerCase());
-}
+/**
+ * The numeric spine of a citation: the article/paragraph/point numbers and
+ * single-letter points, in order. "Chapter 5, paragraph 12" gives ["5","12"];
+ * "Art. 178(1)(a)" gives ["178","1","a"].
+ *
+ * Single letters are kept because a legal point IS a single letter; that is
+ * also why no length-based filtering is used anywhere in this file.
+ */
+const spineOf = (tokens: string[]): string[] =>
+  tokens.filter((t) => /^\d+$/.test(t) || /^[a-z]$/.test(t));
+
+/** First path segment of a regulation id — the document, not the framework. */
+const idDocSegment = (id: RegulationId): string =>
+  id.slice("regulation://".length).split("/")[0] ?? "";
 
 const arraysEqual = (a: string[], b: string[]): boolean =>
   a.length === b.length && a.every((v, i) => v === b[i]);
 
-const endsWithSegments = (segs: string[], suffix: string[]): boolean =>
-  suffix.length > 0 &&
-  suffix.length <= segs.length &&
-  arraysEqual(segs.slice(segs.length - suffix.length), suffix);
+const startsWithTokens = (haystack: string[], prefix: string[]): boolean =>
+  prefix.length < haystack.length && prefix.every((v, i) => v === haystack[i]);
 
-/**
- * Loose citation string → Regulation, deterministic. Matching passes:
- *
- *   (i)   exact normalized-citation equality — both sides lowercased, split on
- *         punctuation/whitespace, abbreviations expanded (art→article,
- *         para→paragraph, gl→guidelines), rejoined;
- *   (ii)  normalized-citation containment in either direction, preferring the
- *         candidate whose normalized length is closest to the query's, then
- *         corpus order;
- *   (iii) article/paragraph/point extraction — numeric and single-letter
- *         tokens ("178(1)(a)" ⇒ ["178","1","a"]) matched against the id path
- *         segments after the framework (regulation://{fw}/178/1/a), filtered
- *         by a framework token when the query names one; exact segment match
- *         preferred over suffix match, ties broken by corpus order.
- */
-export function resolveCitationIn(regulations: Regulation[], text: string): Regulation | null {
-  const nq = normalizeCitation(text);
-  if (nq.length === 0) return null;
-
-  // (i) exact normalized equality.
-  for (const r of regulations) {
-    if (normalizeCitation(r.citation) === nq) return r;
-  }
-
-  // (ii) containment either direction.
-  if (nq.length >= 3) {
-    let best: Regulation | null = null;
-    let bestGap = Number.POSITIVE_INFINITY;
-    for (const r of regulations) {
-      const nc = normalizeCitation(r.citation);
-      if (nc.length < 3) continue;
-      if (!nc.includes(nq) && !nq.includes(nc)) continue;
-      const gap = Math.abs(nc.length - nq.length);
-      if (gap < bestGap) {
-        best = r;
-        bestGap = gap;
+/** Index of `window` as a contiguous run in `tokens`, or -1. */
+function windowAt(tokens: string[], window: string[]): number {
+  if (window.length === 0 || window.length > tokens.length) return -1;
+  for (let i = 0; i + window.length <= tokens.length; i++) {
+    let hit = true;
+    for (let j = 0; j < window.length; j++) {
+      if (tokens[i + j] !== window[j]) {
+        hit = false;
+        break;
       }
     }
-    if (best !== null) return best;
+    if (hit) return i;
+  }
+  return -1;
+}
+
+/**
+ * Document aliases mapped to the documents they name.
+ *
+ * A citation identifies its document in whatever spelling the writer knows:
+ * the framework ("eba"), the document id ("eba-gl-2017-16"), or the corpus's
+ * own short id segment ("gl-2017-16", "egim"). All three are indexed, and an
+ * alias naming several documents (a bare framework) narrows the pool to those
+ * several rather than picking one.
+ */
+function documentAliases(
+  regulations: Regulation[],
+): Map<string, { tokens: string[]; docs: Set<string> }> {
+  const index = new Map<string, { tokens: string[]; docs: Set<string> }>();
+  const add = (raw: string, docId: string): void => {
+    const tokens = citationTokens(raw);
+    if (tokens.length === 0) return;
+    const key = tokens.join(" ");
+    const slot = index.get(key);
+    if (slot === undefined) index.set(key, { tokens, docs: new Set([docId]) });
+    else slot.docs.add(docId);
+  };
+  for (const r of regulations) {
+    add(r.framework, r.document_id);
+    add(r.document_id, r.document_id);
+    add(idDocSegment(r.id), r.document_id);
+    add(`${r.framework} ${r.document_id}`, r.document_id);
+  }
+  return index;
+}
+
+/**
+ * The document(s) a citation names, and the tokens that named them.
+ *
+ * The window is reported so it can be REMOVED before the spine is taken:
+ * "EBA GL 2017/16 paragraph 78" carries the numbers 2017 and 16, which belong
+ * to the document's name and not to the provision. Left in, they make the
+ * spine ["2017","16","78"], which matches nothing — the resolver then falls
+ * through to a looser rule, and looser rules are what fabricate.
+ */
+function scopeToDocument(
+  tokens: string[],
+  index: Map<string, { tokens: string[]; docs: Set<string> }>,
+): { docs: Set<string> | null; rest: string[] } {
+  let bestTokens: string[] | null = null;
+  let bestDocs: Set<string> | null = null;
+  let bestAt = -1;
+  for (const { tokens: alias, docs } of index.values()) {
+    const at = windowAt(tokens, alias);
+    if (at === -1) continue;
+    // Longest alias wins; among equals, the one naming fewest documents.
+    const better =
+      bestTokens === null ||
+      alias.length > bestTokens.length ||
+      (alias.length === bestTokens.length && docs.size < (bestDocs?.size ?? Number.POSITIVE_INFINITY));
+    if (better) {
+      bestTokens = alias;
+      bestDocs = docs;
+      bestAt = at;
+    }
+  }
+  if (bestTokens === null || bestDocs === null) return { docs: null, rest: tokens };
+  return {
+    docs: bestDocs,
+    rest: [...tokens.slice(0, bestAt), ...tokens.slice(bestAt + bestTokens.length)],
+  };
+}
+
+/** Instruments a citation can name, and how to recognise them in prose. */
+const INSTRUMENT_PATTERNS: Array<{ key: string; re: RegExp }> = [
+  { key: "crr", re: /\bcrr\b|regulation\s*\(eu\)\s*(no\.?\s*)?575\s*\/\s*2013|\b575\s*\/\s*2013\b/i },
+  { key: "crd", re: /\bcrd\s*(iv|v)?\b|directive\s*2013\s*\/\s*36/i },
+];
+
+/** A numbered EU instrument the citation names, e.g. "Regulation (EU) No 9999/9999". */
+const namedInstrument = (text: string): string | null => {
+  for (const { key, re } of INSTRUMENT_PATTERNS) if (re.test(text)) return key;
+  const m = /regulation\s*\(eu\)\s*(?:no\.?\s*)?(\d+)\s*\/\s*(\d{4})/i.exec(text);
+  return m === null ? null : `regulation-${m[1]}-${m[2]}`;
+};
+
+/** Does any served record belong to the instrument this citation names? */
+function corpusHolds(regulations: Regulation[], instrument: string): boolean {
+  const needle = instrument.replace(/[^a-z0-9]/g, "");
+  return regulations.some((r) => {
+    const hay = `${r.framework}${r.document_id}${idDocSegment(r.id)}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+    return hay.includes(needle);
+  });
+}
+
+/** How many candidates a declined resolution is allowed to carry. */
+const MAX_CANDIDATES = 10;
+
+const asCandidate = (r: Regulation): CitationCandidate => ({
+  id: r.id,
+  citation: r.citation,
+  document_id: r.document_id,
+});
+
+/** Instrument key rendered the way a reader would write it. */
+const instrumentLabel = (instrument: string): string =>
+  instrument.startsWith("regulation-")
+    ? instrument.replace(/^regulation-(\d+)-(\d+)$/, "Regulation (EU) No $1/$2")
+    : instrument.toUpperCase();
+
+/** Several equally good matches: report them all, choose none. */
+function ambiguousResolution(text: string, hits: Regulation[]): CitationResolution {
+  const docs = new Set(hits.map((r) => r.document_id));
+  return {
+    match: null,
+    confidence: "none",
+    ambiguous: true,
+    candidates: hits.slice(0, MAX_CANDIDATES).map(asCandidate),
+    unmatched_segments: [],
+    coverage_note:
+      `"${text}" matches ${hits.length} records across ${docs.size} document(s)` +
+      `${hits.length > MAX_CANDIDATES ? ` (first ${MAX_CANDIDATES} listed)` : ""}. ` +
+      "Name the document to disambiguate, or open one of the candidates.",
+  };
+}
+
+/**
+ * Loose citation string to a resolution that can say "I don't know".
+ *
+ * The previous version could not. It matched normalized citations by
+ * containment in either direction, so "Article 1218" contained "Article 121"
+ * and resolved to it; and it fell back to a suffix match on id segments. With
+ * no check on the instrument a citation named, "Article 178 of the CRR" landed
+ * on whatever document happened to have a paragraph 178. Every one of those
+ * came back as a confident, fully-populated match with no way to tell it from
+ * a real hit — which for a regulatory tool is the worst failure available,
+ * because the consumer presents it to a reader as a citation.
+ *
+ * Matching now, in order, and nothing below it:
+ *
+ *   (0) instrument gate — a citation naming an instrument the corpus does not
+ *       hold resolves to null with a coverage note, never into another
+ *       document that shares a number;
+ *   (i) exact normalized-citation equality;
+ *   (ii) exact equality of the numeric SPINE (article/paragraph/point numbers,
+ *        structural words dropped), scoped to the document the citation names.
+ *        Exact: 1218 is not 121, and 178 is not 178(1)(a);
+ *   (iii) narrower relatives — records whose spine strictly extends the
+ *        citation's. Returned as candidates with match still null, because
+ *        "the corpus holds 178(1)(a) and 178(1)(b) but no Article 178" is
+ *        useful and "Article 178 is 178(1)(a)" is false.
+ *
+ * Several equally good matches make the result ambiguous — candidates are
+ * returned and `match` stays null, because picking one silently is the bug.
+ */
+export function resolveCitationDetailed(
+  regulations: Regulation[],
+  text: string,
+): CitationResolution {
+  const none = (extra: Partial<CitationResolution> = {}): CitationResolution => ({
+    match: null,
+    confidence: "none",
+    candidates: [],
+    ambiguous: false,
+    unmatched_segments: [],
+    ...extra,
+  });
+
+  const queryTokens = citationTokens(text);
+  if (queryTokens.length === 0) return none();
+
+  // (0) The instrument gate. Checked first: a wrong instrument is not a near
+  // miss, it is a different body of law.
+  const instrument = namedInstrument(text);
+  if (instrument !== null && !corpusHolds(regulations, instrument)) {
+    // A dead end that names the way out. The corpus does not hold the CRR, but
+    // most of what it does hold elaborates it — so the records CITING the
+    // instrument are the answer to what was almost certainly being asked.
+    const citing = regulations.filter((r) =>
+      (r.cites ?? []).some((c) => citationTokens(c.framework).join("") === instrument),
+    ).length;
+    return none({
+      coverage_note:
+        `This corpus holds no ${instrumentLabel(instrument)}. Nothing was matched, rather than ` +
+        "sourcing a same-numbered provision from another document. " +
+        (citing > 0
+          ? `${citing} records do cite it — search_regulation with the provision number, or ` +
+            "get_referrers on one of those records, to reach what elaborates it."
+          : "Use get_corpus_info for the documents actually loaded."),
+    });
   }
 
-  // (iii) segment extraction against id paths.
-  const tokens = citationTokens(text);
-  const frameworks = new Set(regulations.map((r) => r.framework.toLowerCase()));
-  const frameworkHint = tokens.find((t) => frameworks.has(t));
-  const segments = tokens.filter((t) => /^\d+$/.test(t) || /^[a-z]$/.test(t));
-  if (segments.length === 0) return null;
+  // The document a citation names is stripped from BOTH sides before anything
+  // is compared: a record's own citation may repeat it ("CRR Article 180"), a
+  // query may omit it ("Art. 180"), and its numbers ("2017/16") are not the
+  // provision's.
+  const index = documentAliases(regulations);
+  const { docs, rest } = scopeToDocument(queryTokens, index);
+  const pool = docs === null ? regulations : regulations.filter((r) => docs.has(r.document_id));
+  const bare = (tokens: string[]): string[] => scopeToDocument(tokens, index).rest;
 
-  const candidates =
-    frameworkHint === undefined
-      ? regulations
-      : regulations.filter((r) => r.framework.toLowerCase() === frameworkHint);
+  // (i) Exact equality of the whole citation, structural words included — so
+  // "paragraph 78" does not match a record that says "Article 78".
+  const nq = rest.join("");
+  const exactHits = pool.filter((r) => bare(citationTokens(r.citation)).join("") === nq);
+  if (exactHits.length === 1) {
+    return { ...none(), match: exactHits[0] ?? null, confidence: "exact" };
+  }
+  if (exactHits.length > 1) return ambiguousResolution(text, exactHits);
 
-  const exact = candidates.find((r) => arraysEqual(idSegments(r.id), segments));
-  if (exact !== undefined) return exact;
-  return candidates.find((r) => endsWithSegments(idSegments(r.id), segments)) ?? null;
+  // (i-alias) The same equality against a record's declared aliases.
+  //
+  // Kept as its own pass, and its own confidence level, rather than folded into
+  // (i): the caller asked for a label this record does not carry. EBA
+  // guidelines number PARAGRAPHS, so "Article 178" is a common way to cite one
+  // and also a real CRR article — the alias makes the loose spelling resolvable
+  // without letting it be reported as the record's citation.
+  const aliasHits = pool.filter((r) =>
+    (r.citation_aliases ?? []).some((a) => bare(citationTokens(a)).join("") === nq),
+  );
+  if (aliasHits.length === 1) {
+    const hit = aliasHits[0];
+    return {
+      ...none(),
+      match: hit ?? null,
+      confidence: "alias",
+      coverage_note:
+        hit === undefined
+          ? undefined
+          : `Matched an alias. This record's own citation is "${hit.citation}" — quote that, ` +
+            `not "${text}".`,
+    };
+  }
+  if (aliasHits.length > 1) return ambiguousResolution(text, aliasHits);
+
+  // (ii) Spine equality: the numbers alone, however the citation spells the
+  // structure around them.
+  const spine = spineOf(rest.filter((t) => !STRUCTURAL.has(t)));
+  if (spine.length === 0) return none();
+
+  const recordSpine = (r: Regulation): string[] =>
+    spineOf(bare(citationTokens(r.citation)).filter((t) => !STRUCTURAL.has(t)));
+
+  const spineHits = pool.filter((r) => arraysEqual(recordSpine(r), spine));
+  if (spineHits.length === 1) {
+    return { ...none(), match: spineHits[0] ?? null, confidence: "segment" };
+  }
+  if (spineHits.length > 1) return ambiguousResolution(text, spineHits);
+
+  // (iii) Narrower relatives. Reported, never returned as the match.
+  const relatives = pool.filter((r) => startsWithTokens(recordSpine(r), spine));
+  if (relatives.length > 0) {
+    return none({
+      candidates: relatives.slice(0, MAX_CANDIDATES).map(asCandidate),
+      coverage_note:
+        `No record is "${text}" itself. The corpus holds ${relatives.length} narrower provision(s) ` +
+        `under it${relatives.length > MAX_CANDIDATES ? ` (first ${MAX_CANDIDATES} listed)` : ""}; ` +
+        "open one, or use get_regulation_tree on it for the whole subtree.",
+    });
+  }
+
+  // Nothing placed the citation. Say which parts went unmatched, so a dropped
+  // point is visible rather than silently ignored.
+  return none({
+    unmatched_segments: spine,
+    coverage_note:
+      `Nothing in this corpus is numbered ${spine.join(".")}${docs === null ? "" : " in the document named"}. ` +
+      "Try search_regulation with the citation's key words.",
+  });
+}
+
+/** Back-compatible shim: the match alone, or null. */
+export function resolveCitationIn(regulations: Regulation[], text: string): Regulation | null {
+  return resolveCitationDetailed(regulations, text).match;
 }
 
 // --- File-backed adapters -------------------------------------------------
@@ -309,8 +554,8 @@ export function createFileAdapters(corpus: CorpusFile): {
         id,
       );
     },
-    async resolveCitation(text: string): Promise<Regulation | null> {
-      return resolveCitationIn(corpus.regulation, text);
+    async resolveCitation(text: string): Promise<CitationResolution> {
+      return resolveCitationDetailed(corpus.regulation, text);
     },
     async taxonomy(): Promise<ReviewArea[]> {
       // An authored taxonomy wins: it can name areas the corpus does not cover

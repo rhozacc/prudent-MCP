@@ -87,7 +87,11 @@ export function registerSourceTools(server: McpServer): void {
         "milestones (upcoming regulatory dates, chronological), url, and notes. Unknown ids " +
         "return isError with a pointer. Use list_sources to see the whole registry, or " +
         "search_regulation for the corpus content derived from this document.",
-      inputSchema: { id: lenient(sourceIdSchema).describe("e.g. source://eba/gl-2017-16") },
+      inputSchema: {
+        id: lenient(sourceIdSchema).describe(
+          "A source id from list_sources — shape source://{framework}/{document-id}",
+        ),
+      },
       outputSchema: SourceSchema,
       annotations: READ_ONLY_HINTS,
     },

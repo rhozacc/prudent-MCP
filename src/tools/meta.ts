@@ -19,6 +19,7 @@ import type {
   TestId,
 } from "../schema.ts";
 import {
+  CitationResolutionSchema,
   CorpusInfoSchema,
   ReferrersSchema,
   RegulationSchema,
@@ -27,7 +28,7 @@ import {
   playbookIdSchema,
   regulationIdSchema,
 } from "../schema.ts";
-import { READ_ONLY_HINTS, lenient, miss, ok, stripEdgeNoise } from "./shared.ts";
+import { READ_ONLY_HINTS, fitOrCompact, lenient, miss, ok, stripEdgeNoise } from "./shared.ts";
 
 // ── Local return types ────────────────────────────────────────────────────────
 
@@ -56,9 +57,20 @@ type ExpandedPlaybook = {
 
 type ConciseExpandedPlaybook = Omit<ExpandedPlaybook, "phases"> & { phases: ConcisePhase[] };
 
+// A phase without its reference stubs, carrying counts instead. Used by
+// get_area_overview, where the stubs restate ids the same response already
+// lists de-duplicated — twice the bytes for none of the information.
+type WalkthroughPhase = {
+  name: string;
+  description: string;
+  reference_counts: Record<ResolvedReference["type"], number>;
+};
+
+type PlaybookWalkthrough = Omit<ExpandedPlaybook, "phases"> & { phases: WalkthroughPhase[] };
+
 type AreaOverview = {
   area: ReviewArea;
-  playbooks: ExpandedPlaybook[] | ConciseExpandedPlaybook[];
+  playbooks: ExpandedPlaybook[] | ConciseExpandedPlaybook[] | PlaybookWalkthrough[];
   regulation_ids: RegulationId[];
   check_ids: CheckId[];
   test_ids: TestId[];
@@ -160,6 +172,27 @@ async function expandPlaybook(raw: Playbook): Promise<ExpandedPlaybook> {
     phases,
     gates: raw.gates,
     last_updated: raw.last_updated,
+  };
+}
+
+/**
+ * Playbook as a walkthrough summary: the phases and what each one draws on, by
+ * count and type. The ids themselves live in the overview's flat lists, and
+ * expand_playbook resolves them per phase when that grouping matters.
+ */
+function toPlaybookWalkthrough(pb: ExpandedPlaybook): PlaybookWalkthrough {
+  return {
+    ...pb,
+    phases: pb.phases.map((ph) => {
+      const reference_counts: Record<ResolvedReference["type"], number> = {
+        regulation: 0,
+        test: 0,
+        check: 0,
+        playbook: 0,
+      };
+      for (const ref of ph.references) reference_counts[ref.type] += 1;
+      return { name: ph.name, description: ph.description, reference_counts };
+    }),
   };
 }
 
@@ -310,8 +343,12 @@ export function registerMetaTools(server: McpServer): void {
       description:
         "The computed reverse index: everything that references this ID through a typed " +
         "cross-surface reference (parent/children, derived_from, regulatory_basis, " +
-        "regulatory_scope, playbook phase references). Returns { regulation: [...], " +
-        "tests: [...], checks: [...], playbooks: [...] }. Accepts regulation://, test://, " +
+        "regulatory_scope, playbook phase references). Returns { regulation, tests, checks, " +
+        "playbooks, primary: { tests, checks } }, where `primary` is the subset naming this " +
+        "provision as the one it RESTATES rather than the span it was traced to — " +
+        "derived_from is commonly a whole section, so the flat lists can return the same " +
+        "answer for every article in it. Prefer `primary` when it is non-empty. Accepts " +
+        "regulation://, test://, " +
         "check://, playbook:// ids — source:// ids error (sources sit outside the reference " +
         "graph; they join via document_id). Resolve returned ids with the matching get_* tool.",
       inputSchema: {
@@ -344,31 +381,26 @@ export function registerMetaTools(server: McpServer): void {
     {
       title: "Resolve citation",
       description:
-        "Loose citation string → structured Regulation record.\n" +
-        '  "Art. 178(1)(a)"           → regulation://crr/178/1/a\n' +
-        '  "CRR Article 180"          → regulation://crr/180\n' +
-        '  "EBA GL 2017/16 para 78"   → regulation://eba/gl-2017-16/78\n' +
-        "Matching prefers exact normalized citations, then containment (a citation naming a " +
-        "missing node resolves to the closest recorded relative), then article/paragraph/point " +
-        "segments against id paths. Returns { match: Regulation | null } — on null, fall back " +
-        "to search_regulation with the citation's key words.",
+        "Loose citation string in prose (\"Art. 178(1)(a)\", \"Chapter 5, paragraph 12\", " +
+        "\"EBA GL 2017/16 para 78\") → the Regulation record it names, or an honest refusal.\n" +
+        "Matching is EXACT, in this order: the record's own citation, then its numeric spine " +
+        "(article/paragraph/point numbers) scoped to the document the citation names. There is " +
+        "no fuzzy fallback — 1218 is not 121, and a citation naming an instrument this corpus " +
+        "does not hold resolves to null rather than to a same-numbered provision elsewhere.\n" +
+        "Returns { match, confidence, candidates, ambiguous, unmatched_segments, coverage_note }:\n" +
+        "  match null + candidates non-empty → several records fit (ambiguous: true) or the " +
+        "corpus holds only narrower provisions under the one asked for; open a candidate by id.\n" +
+        "  match null + coverage_note → why, in terms of what this corpus covers.\n" +
+        "  confidence 'exact' | 'segment' says which rule matched.\n" +
+        "Do not present a null match as a citation. Fall back to search_regulation with the " +
+        "citation's key words, or get_corpus_info for the documents actually loaded.",
       inputSchema: {
         text: z.string().describe("A loose, human-prose citation."),
       },
-      outputSchema: { match: RegulationSchema.nullable() },
+      outputSchema: CitationResolutionSchema.shape,
       annotations: READ_ONLY_HINTS,
     },
-    async ({ text }) => {
-      const match = await adapters.meta.resolveCitation(text);
-      const result = ok({ match });
-      if (match === null) {
-        result.content.push({
-          type: "text",
-          text: "No regulation matched this citation. Try search_regulation with the citation's key words.",
-        });
-      }
-      return result;
-    },
+    async ({ text }) => ok(await adapters.meta.resolveCitation(text)),
   );
 
   server.registerTool(
@@ -405,7 +437,9 @@ export function registerMetaTools(server: McpServer): void {
         "payload — a dense playbook resolves to ~90 stubs plus a regulatory_scope of a couple " +
         "of hundred ids, none of which is the walkthrough.",
       inputSchema: {
-        id: lenient(playbookIdSchema).describe("e.g. playbook://calibration/pd"),
+        id: lenient(playbookIdSchema).describe(
+          "A playbook id from search_playbooks, list_review_areas or get_area_overview — shape playbook://{document}/{slug}",
+        ),
         detail: detailSchema,
       },
       annotations: READ_ONLY_HINTS,
@@ -424,16 +458,19 @@ export function registerMetaTools(server: McpServer): void {
       title: "Area overview",
       description:
         "One-shot entry point for a review area — prefer this over several search_* calls " +
-        "when the question is about a whole area. Returns { area, playbooks, regulation_ids, " +
-        "check_ids, test_ids, playbook_ids }: the ReviewArea node, its playbooks expanded " +
-        "(reference stubs by default; detail: 'full' embeds complete records), and " +
-        "deduplicated flat id lists encountered across all phases — playbook_ids being other " +
-        "playbooks referenced but not already listed, which is how a lifecycle playbook names " +
-        "the per-parameter ones. Asking for a top-level area includes everything in " +
-        "its subareas. Accepts the slug from list_review_areas ('pd-estimation', " +
-        "'credit-risk.irb-approach-governance-validation-and-lifecycle-management') OR the " +
-        "area name as spelled on a playbook record ('PD Estimation'). Unknown areas return " +
-        "isError — call list_review_areas for the canonical list.",
+        "when the question is about a whole area.\n" +
+        "Returns { area, playbooks, regulation_ids, check_ids, test_ids, playbook_ids }. " +
+        "By default each playbook is a walkthrough SUMMARY: phase names, descriptions and " +
+        "per-phase reference counts. The references themselves arrive de-duplicated in the " +
+        "flat id lists below, so nothing is missing — expand_playbook gives the per-phase " +
+        "breakdown when the phase a reference belongs to actually matters. " +
+        "detail: 'full' embeds every referenced record inline and is large; ask for it only " +
+        "when the whole area is being read.\n" +
+        "playbook_ids are playbooks referenced but not already listed, which is how a " +
+        "lifecycle playbook names the per-parameter ones. Asking for a top-level area " +
+        "includes everything in its subareas. Accepts the slug from list_review_areas " +
+        "('pd-estimation') or the area name as spelled on a playbook ('PD Estimation'). " +
+        "Unknown areas return isError — call list_review_areas for the canonical list.",
       inputSchema: {
         area: lenient(z.string()).describe(
           "Area slug or name, e.g. 'pd-estimation' or 'PD Estimation'",
@@ -481,15 +518,27 @@ export function registerMetaTools(server: McpServer): void {
           }
         }
       }
-      const playbooks = detail === "full" ? expanded : expanded.map(toConcisePlaybook);
-      return ok({
-        area: areaNode,
-        playbooks,
-        regulation_ids,
-        check_ids,
-        test_ids,
-        playbook_ids,
-      } satisfies AreaOverview);
+      // Default is the summary, not the stub list. Every reference stub in a
+      // phase is also an entry in the flat id lists below, so serving both put
+      // each id in the response twice — and the stub wrapper costs about twice
+      // what the id does. On a real area that duplication was 73% of the whole
+      // payload, which is a fifth of a working context spent restating what the
+      // same response already said.
+      const rest = { area: areaNode, regulation_ids, check_ids, test_ids, playbook_ids };
+      if (detail !== "full") {
+        return ok({ ...rest, playbooks: expanded.map(toPlaybookWalkthrough) } satisfies AreaOverview);
+      }
+      return ok(
+        fitOrCompact(
+          { ...rest, playbooks: expanded } satisfies AreaOverview,
+          () => ({ ...rest, playbooks: expanded.map(toPlaybookWalkthrough) } satisfies AreaOverview),
+          (tokens) =>
+            `detail: 'full' for this area is ~${tokens} tokens, over the per-response ceiling, ` +
+            "so the walkthrough summary is served instead. The complete records are reachable " +
+            "per id: expand_playbook for one playbook's references, or get_regulation / " +
+            "get_check / get_test for the ids listed here.",
+        ),
+      );
     },
   );
 
@@ -505,7 +554,9 @@ export function registerMetaTools(server: McpServer): void {
         "get_regulation. Unknown ids return isError with a pointer. Use get_regulation_tree " +
         "to walk the whole sub-tree.",
       inputSchema: {
-        id: lenient(regulationIdSchema).describe("e.g. regulation://crr/180/1/a"),
+        id: lenient(regulationIdSchema).describe(
+          "A regulation id from search_regulation or resolve_citation — shape regulation://{document}/{provision}",
+        ),
         as_of: z.string().date().optional().describe("ISO date — resolve the regulation as of this date"),
         detail: detailSchema,
       },
@@ -541,7 +592,9 @@ export function registerMetaTools(server: McpServer): void {
         "nodes cut off by depth, a cycle, or the cap carry truncated: true. Unknown roots " +
         "return isError — verify with search_regulation.",
       inputSchema: {
-        id: lenient(regulationIdSchema).describe("Root of the tree, e.g. regulation://crr/180"),
+        id: lenient(regulationIdSchema).describe(
+          "Root of the tree: a regulation id from search_regulation — shape regulation://{document}/{provision}",
+        ),
         depth: z.number().int().min(0).max(10).optional().describe("Max regulation recursion depth (default 5)"),
         as_of: z.string().date().optional().describe("ISO date — resolve regulations as of this date"),
         detail: detailSchema,

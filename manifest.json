@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "prudent-mcp",
   "version": "0.6.0",
-  "description": "IRB credit risk model validation knowledge base — regulation, tests, checks, playbooks, and source registry for Claude.",
+  "description": "IRB credit risk regulatory knowledge base — regulation, tests, checks, playbooks, and source registry for Claude.",
   "license": "AGPL-3.0-only",
   "author": {
     "name": "Econlab"

@@ -18,7 +18,7 @@ Ranked, field-scoped search across the catalog of validation playbooks: area and
 | `limit` / `offset` | `number` | Optional paging (default 20 per page) |
 | `detail` | `"concise" \| "full"` | Optional, default `"concise"` |
 
-**Returns:** the shared envelope `{ results, total_matches, offset, truncated }`. Concise results are `{ id, area, subarea, phase_count }`; `detail: "full"` serves complete records. Use `expand_playbook` for phases with references resolved inline.
+**Returns:** the shared envelope `{ results, returned, total_matches, offset, truncated, next_offset }`. Concise results are `{ id, area, subarea, phase_count }`; `detail: "full"` serves complete records. Use `expand_playbook` for phases with references resolved inline.
 
 **Example:**
 ```ts

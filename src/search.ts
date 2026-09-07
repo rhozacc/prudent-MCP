@@ -9,9 +9,17 @@
  *   - The query is tokenized (lowercased, split on non-alphanumerics, empties
  *     dropped). An empty or whitespace-only query returns [] — enumeration is
  *     `list()`'s job, never search's.
+ *   - The query is stopword-filtered first: common function words are dropped
+ *     unless they contain a digit. They matched as substrings almost everywhere
+ *     ("of" inside "proof"), which both pinned the excerpt to the head of the
+ *     record and handed every record a free point of coverage — the primary
+ *     sort key. Filtering is by list and not by length, because a citation's
+ *     point segment ("180(1)(a)") is one character and carries meaning.
  *   - Only the declared fields are scanned, each with a weight. Score = sum
  *     over tokens of `weight × occurrences`; a whole-word occurrence counts
- *     full weight, a substring-only occurrence counts half.
+ *     full weight, a substring-only occurrence a quarter. Only whole-word
+ *     matches establish COVERAGE, so a loose match cannot outrank a record
+ *     that genuinely uses the term.
  *   - Results are ordered by COVERAGE first — how many of the query's distinct
  *     tokens the record matches at all — and only then by score, ties broken
  *     by input order. So the ranking is fully deterministic.
@@ -26,8 +34,10 @@
  *     by coverage first fixes that without dropping anything: a single-token
  *     query has coverage 1 everywhere, so it falls straight through to score
  *     and behaves exactly as before.
- *   - Each result carries the matched field and a ~120-char excerpt around
- *     the first match in the record's best-scoring field.
+ *   - Each result carries the matched field and an excerpt centred on the
+ *     densest cluster of query-term hits in the record's best-scoring field,
+ *     widened to word boundaries so it can be quoted. An excerpt that cannot
+ *     be quoted is a pointer, not context, and forces a second call.
  *
  * The per-surface field sets live at the bottom of this file so ranking
  * behavior is defined once and reused by the file adapter, the in-memory
@@ -58,14 +68,53 @@ export interface SearchMatch<T> {
   matched: { field: string; excerpt: string };
 }
 
-const DEFAULT_LIMIT = 20;
-const EXCERPT_WINDOW = 120;
+/**
+ * No cap by default. rankedSearch used to slice to 20 before the tool layer
+ * counted, so `total_matches` reported a page size on every query of every
+ * surface — and paging past it returned nothing, which made the obvious way to
+ * verify the figure confirm it. Ranking returns everything it ranked; the tool
+ * layer pages.
+ */
+const DEFAULT_LIMIT = Number.POSITIVE_INFINITY;
+/**
+ * Wide enough to carry a whole clause. The old 120 produced excerpts that could
+ * not be quoted or reasoned from, so a caller had to fetch the record to find
+ * out whether the hit was real — which doubled the cost of every answer.
+ */
+const EXCERPT_WINDOW = 340;
 
+/**
+ * Tokens that carry no retrieval signal but do enormous damage if scored.
+ *
+ * They match as substrings almost immediately in any English text ("of" inside
+ * "proof", "in" inside "institution"), which had two consequences: the excerpt
+ * window anchored on their position and so pinned to the head of the record,
+ * and every record earned a free point of `coverage` — the primary sort key.
+ * The result was a result list that looked ranked and was not.
+ */
+const STOPWORDS = new Set(
+  ("a an and any are as at be been being but by can could do does for from had has have how in into is it its may" +
+    " must no nor not of on or should so such than that the their them then there these they this those to under" +
+    " until up was were what when where which while who whom why will with within would")
+    .split(" "),
+);
+
+/**
+ * Query tokens worth scoring: everything except stopwords.
+ *
+ * Filtering on the list alone, rather than also on length, is deliberate —
+ * legal citations carry meaningful one-character segments ("Article 180(1)(a)")
+ * and a blanket length rule would throw the point away.
+ */
 export function tokenize(query: string): string[] {
-  return query
+  const raw = query
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 0);
+  const kept = raw.filter((t) => /\d/.test(t) || !STOPWORDS.has(t));
+  // A query made entirely of stopwords ("the of") is still a query; fall back
+  // rather than silently returning nothing.
+  return kept.length > 0 ? kept : raw;
 }
 
 const isAlphanumeric = (ch: string): boolean => /[a-z0-9]/.test(ch);
@@ -90,11 +139,94 @@ function countOccurrences(
   return { total, whole, first };
 }
 
-function makeExcerpt(text: string, index: number): string {
+/**
+ * Sentence spans of a field, as [start, end) pairs covering the whole string.
+ *
+ * A terminator only ends a sentence when whitespace follows it: "Art. 178",
+ * "5.5" and "(a)." are not sentence ends, and splitting there is how an excerpt
+ * ends up cut mid-citation.
+ */
+function sentenceSpans(text: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  let start = 0;
+  for (let i = 0; i < text.length - 1; i++) {
+    const ch = text[i] ?? "";
+    if (ch !== "." && ch !== "!" && ch !== "?") continue;
+    const after = text[i + 1] ?? "";
+    if (after !== " " && after !== "\n" && after !== "\t") continue;
+    spans.push([start, i + 1]);
+    start = i + 2;
+  }
+  if (start < text.length) spans.push([start, text.length]);
+  return spans;
+}
+
+/**
+ * Excerpt as a run of WHOLE sentences around the densest cluster of query-term
+ * hits, so it can be read, quoted and reasoned from.
+ *
+ * Two earlier versions of this were not enough. Anchoring on a single index —
+ * the earliest occurrence of any token — put the window wherever the commonest
+ * token first appeared, which with stopwords scored was the head of the record:
+ * excerpts came back near-identical whatever you asked. Snapping the character
+ * window to word boundaries fixed the mid-word cuts but still ended mid-clause
+ * about half the time, and an excerpt that cannot be quoted is a pointer, not
+ * context — the caller opens the full record to find out whether the hit was
+ * real, so the excerpt has cost tokens and saved nothing.
+ *
+ * Whole sentences make the unit of context a unit of meaning. The budget is
+ * still honoured: sentences are added around the centre while they fit, and a
+ * single sentence longer than the budget falls back to a word-boundary window
+ * inside it.
+ */
+function makeExcerpt(text: string, hits: number[]): string {
   if (text.length <= EXCERPT_WINDOW) return text;
-  const start = Math.max(0, Math.min(index - Math.floor(EXCERPT_WINDOW / 3), text.length - EXCERPT_WINDOW));
-  const end = Math.min(text.length, start + EXCERPT_WINDOW);
-  return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
+
+  // Densest cluster: the hit whose window covers the most other hits.
+  let centre = hits[0] ?? 0;
+  let best = -1;
+  for (const h of hits) {
+    const covered = hits.filter((o) => Math.abs(o - h) <= EXCERPT_WINDOW / 2).length;
+    if (covered > best) {
+      best = covered;
+      centre = h;
+    }
+  }
+
+  const spans = sentenceSpans(text);
+  let at = spans.findIndex(([s, e]) => centre >= s && centre < e);
+  if (at === -1) at = 0;
+  const centreSpan = spans[at];
+  if (centreSpan === undefined) return text.slice(0, EXCERPT_WINDOW);
+
+  let [start, end] = centreSpan;
+  if (end - start <= EXCERPT_WINDOW) {
+    // Grow by whole sentences, preferring the side that is shorter so the
+    // excerpt stays centred on the match rather than running off one way.
+    let lo = at;
+    let hi = at;
+    for (;;) {
+      const prev = lo > 0 ? spans[lo - 1] : undefined;
+      const next = hi < spans.length - 1 ? spans[hi + 1] : undefined;
+      const prevCost = prev === undefined ? Number.POSITIVE_INFINITY : prev[1] - prev[0];
+      const nextCost = next === undefined ? Number.POSITIVE_INFINITY : next[1] - next[0];
+      if (prevCost === Number.POSITIVE_INFINITY && nextCost === Number.POSITIVE_INFINITY) break;
+      const takePrev = prevCost <= nextCost;
+      const cost = takePrev ? prevCost : nextCost;
+      if (end - start + cost > EXCERPT_WINDOW) break;
+      if (takePrev && prev !== undefined) { lo -= 1; start = prev[0]; }
+      else if (next !== undefined) { hi += 1; end = next[1]; }
+    }
+  } else {
+    // One sentence longer than the whole budget: window inside it, on word
+    // boundaries, and let the ellipses say it was cut.
+    start = Math.max(centreSpan[0], Math.min(centre - Math.floor(EXCERPT_WINDOW / 3), centreSpan[1] - EXCERPT_WINDOW));
+    end = Math.min(centreSpan[1], start + EXCERPT_WINDOW);
+    while (start > centreSpan[0] && isAlphanumeric(text[start - 1] ?? "") && isAlphanumeric(text[start] ?? "")) start--;
+    while (end < centreSpan[1] && isAlphanumeric(text[end - 1] ?? "") && isAlphanumeric(text[end] ?? "")) end++;
+  }
+
+  return `${start > 0 ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
 }
 
 export function rankedSearch<T>(
@@ -110,7 +242,7 @@ export function rankedSearch<T>(
 
   items.forEach((record, order) => {
     let total = 0;
-    let best: { field: string; score: number; text: string; index: number } | null = null;
+    let best: { field: string; score: number; text: string; hits: number[] } | null = null;
     // Distinct query tokens this record matches ANYWHERE, across every field.
     // Counted per record rather than per field: a record naming "downturn" in
     // its area and "LGD" in a phase description has covered both.
@@ -123,29 +255,32 @@ export function rankedSearch<T>(
 
       let fieldScore = 0;
       let anchorText: string | null = null;
-      let anchorIndex = 0;
+      let anchorHits: number[] = [];
 
       for (const value of values) {
         const lower = value.toLowerCase();
-        let valueFirst = Number.POSITIVE_INFINITY;
+        const valueHits: number[] = [];
         for (const token of tokens) {
           const occ = countOccurrences(lower, token);
           if (occ.total === 0) continue;
-          covered.add(token);
-          // Whole-word occurrences at full weight, substring-only at half.
-          fieldScore += field.weight * (occ.whole + 0.5 * (occ.total - occ.whole));
-          if (occ.first < valueFirst) valueFirst = occ.first;
+          // Only whole-word matches establish coverage. A substring hit still
+          // scores, at a discount, but must not claim the token was found:
+          // coverage is the primary sort key, so a loose match that inflates it
+          // outranks a record that genuinely uses the term.
+          if (occ.whole > 0) covered.add(token);
+          fieldScore += field.weight * (occ.whole + 0.25 * (occ.total - occ.whole));
+          if (occ.first >= 0) valueHits.push(occ.first);
         }
-        if (valueFirst !== Number.POSITIVE_INFINITY && anchorText === null) {
+        if (valueHits.length > 0 && anchorText === null) {
           anchorText = value;
-          anchorIndex = valueFirst;
+          anchorHits = valueHits;
         }
       }
 
       if (fieldScore > 0 && anchorText !== null) {
         total += fieldScore;
         if (best === null || fieldScore > best.score) {
-          best = { field: field.name, score: fieldScore, text: anchorText, index: anchorIndex };
+          best = { field: field.name, score: fieldScore, text: anchorText, hits: anchorHits };
         }
       }
     }
@@ -156,7 +291,7 @@ export function rankedSearch<T>(
         score: total,
         coverage: covered.size,
         query_tokens: tokens.length,
-        matched: { field: best.field, excerpt: makeExcerpt(best.text, best.index) },
+        matched: { field: best.field, excerpt: makeExcerpt(best.text, best.hits) },
         order,
       });
     }

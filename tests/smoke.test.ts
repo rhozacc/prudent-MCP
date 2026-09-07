@@ -4,6 +4,7 @@ import { createServer } from "../src/server.ts";
 import { adapters } from "../src/adapters.ts";
 import { playbookInArea, resolveArea } from "../src/areas.ts";
 import { buildRegulationTree, computeCoverageGaps, expandRegulation } from "../src/tools/meta.ts";
+import { RESPONSE_CHAR_BUDGET } from "../src/tools/shared.ts";
 
 describe("server registration", () => {
   it("constructs without crashing", () => {
@@ -369,7 +370,14 @@ describe("MCP wire contracts (in-memory transport)", () => {
     expect(env.results).toHaveLength(1);
     expect(env.results[0]?.expectation).toBeDefined(); // detail: "full" serves complete records
     expect(env.truncated).toBe(true);
-    expect((res.content as unknown[]).length).toBe(2); // envelope + truncation hint
+
+    // One content block, and it parses. The truncation hint used to be appended
+    // as a second block, which concatenated into the body a client reads and
+    // left it unparseable; it now travels as `notice` inside the envelope.
+    const blocks = res.content as Array<{ text?: string }>;
+    expect(blocks).toHaveLength(1);
+    expect(() => JSON.parse(blocks[0]?.text ?? "")).not.toThrow();
+    expect((env as unknown as { notice?: string }).notice).toContain("offset");
   });
 
   it("get_* misses are isError results with a next-step pointer — never the string 'null'", async () => {
@@ -495,5 +503,91 @@ describe("MCP wire contracts (in-memory transport)", () => {
     for (const id of d.playbook_ids) expect(own.has(id)).toBe(false);
     // And no duplicates.
     expect(new Set(d.playbook_ids).size).toBe(d.playbook_ids.length);
+  });
+
+  it("a search page is shortened to fit the response ceiling, and says so", async () => {
+    // Page size and payload size are different quantities: 20 concise rows are
+    // cheap, 20 full records are not. The page shrinks; total_matches does not.
+    const res = await client.callTool({
+      name: "search_checks",
+      arguments: { query: "default", detail: "full", limit: 100 },
+    });
+    const env = res.structuredContent as {
+      results: unknown[];
+      returned: number;
+      total_matches: number;
+      next_offset: number | null;
+      notice?: string;
+    };
+    expect(env.returned).toBe(env.results.length);
+    expect(env.total_matches).toBeGreaterThanOrEqual(env.returned);
+    // Whatever the page size, the body stays under the ceiling.
+    const body = (res.content as Array<{ text: string }>)[0]?.text ?? "";
+    expect(body.length).toBeLessThanOrEqual(RESPONSE_CHAR_BUDGET + 1_000);
+    if (env.returned < env.total_matches) expect(env.next_offset).toBe(env.returned);
+  });
+
+  it("get_area_overview summarises phases instead of restating the ids it already lists", async () => {
+    // Every reference stub inside a phase was also an entry in the flat id
+    // lists, at roughly twice the bytes — 73% of a real area's payload spent
+    // saying the same thing twice.
+    const ov = await client.callTool({
+      name: "get_area_overview",
+      arguments: { area: "calibration" },
+    });
+    const d = ov.structuredContent as {
+      playbooks: Array<{ phases: Array<Record<string, unknown>> }>;
+      regulation_ids: string[];
+    };
+    const phase = d.playbooks[0]?.phases[0];
+    expect(phase).toBeDefined();
+    expect(phase!["references"]).toBeUndefined();
+    expect(phase!["reference_counts"]).toMatchObject({
+      regulation: expect.any(Number),
+      check: expect.any(Number),
+      test: expect.any(Number),
+      playbook: expect.any(Number),
+    });
+    // The references are still reachable — de-duplicated, in the flat lists.
+    expect(d.regulation_ids.length).toBeGreaterThan(0);
+  });
+
+  it("full search rows cap commentary and declare what they withheld", async () => {
+    const res = await client.callTool({
+      name: "search_regulation",
+      arguments: { query: "commentary", detail: "full", limit: 5 },
+    });
+    const env = res.structuredContent as {
+      results: Array<{ commentary: unknown[]; commentary_omitted?: number }>;
+    };
+    for (const row of env.results) {
+      expect(row.commentary.length).toBeLessThanOrEqual(3);
+      // Nothing is dropped silently: an abridged row says how much is missing.
+      if (row.commentary_omitted !== undefined) expect(row.commentary_omitted).toBeGreaterThan(0);
+    }
+  });
+
+  it("resolve_citation declines rather than answering with a near-numbered provision", async () => {
+    const hit = await client.callTool({
+      name: "resolve_citation",
+      arguments: { text: "Art. 178(1)(a)" },
+    });
+    const found = hit.structuredContent as { match: { id: string } | null; confidence: string };
+    expect(found.match?.id).toBe("regulation://crr/178/1/a");
+    expect(found.confidence).not.toBe("none");
+
+    // An instrument this corpus does not hold is not answered out of one it does.
+    const foreign = await client.callTool({
+      name: "resolve_citation",
+      arguments: { text: "Article 1 of Regulation (EU) No 9999/9999" },
+    });
+    const declined = foreign.structuredContent as {
+      match: unknown;
+      candidates: unknown[];
+      coverage_note?: string;
+    };
+    expect(declined.match).toBeNull();
+    expect(declined.candidates).toEqual([]);
+    expect(declined.coverage_note).toContain("9999/9999");
   });
 });

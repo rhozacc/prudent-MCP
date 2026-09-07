@@ -383,6 +383,53 @@ describe("validateCorpus — verbatim invariant", () => {
   });
 });
 
+describe("validateCorpus — URI-safe ids", () => {
+  // Not cosmetic. An id is copied out of one response and pasted into the next
+  // call, usually inside prose, and every URI extractor stops at a bracket. A
+  // live corpus id ending in "(part2)" reached get_check as "…/2(part2", which
+  // the caller reads as "no such record".
+  it("rejects ids carrying characters a URI stops at in prose", () => {
+    const errors = validateCorpus(
+      { ...empty, regulation: [regulation({ id: "regulation://egim/section-4.2(part2)" })] },
+      NOW,
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("URI-safe id");
+    expect(errors[0]).toContain("'('");
+    expect(errors[0]).toContain("')'");
+  });
+
+  it("names every offending character once, on every surface", () => {
+    const errors = validateCorpus(
+      {
+        ...empty,
+        tests: [testRecord({ id: "test://egim/5.5+-sample-size" })],
+        checks: [check({ id: "check://egim/1-2(part1)-classify" })],
+      },
+      NOW,
+    );
+    expect(errors).toHaveLength(2);
+    expect(errors.find((e) => e.startsWith("test://"))).toContain("'+'");
+  });
+
+  it("accepts the id shapes the corpus actually uses", () => {
+    expect(
+      validateCorpus(
+        {
+          ...empty,
+          regulation: [
+            regulation({ id: "regulation://gl-2017-16/article-178" }),
+            regulation({ id: "regulation://egim/section-0.1-6" }),
+          ],
+          checks: [check({ id: "check://gl-2019-03/GL-1-3-notify-the-eba" })],
+          sources: [source({ id: "source://eba/gl-2017-16" })],
+        },
+        NOW,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("findMarkup", () => {
   it("finds the first tag, in every tag shape", () => {
     expect(findMarkup("LGD<sub>in-default</sub>")).toBe("<sub>");

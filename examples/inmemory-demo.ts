@@ -21,7 +21,7 @@ import type {
   SourceAdapter,
   TestAdapter,
 } from "../src/adapters.ts";
-import { resolveCitationIn } from "../src/file-adapter.ts";
+import { resolveCitationDetailed } from "../src/file-adapter.ts";
 import { computeReferrers } from "../src/referrers.ts";
 import {
   checkSearchFields,
@@ -551,9 +551,9 @@ const inMemoryMeta: MetaAdapter = {
     );
   },
   async resolveCitation(text) {
-    // Same deterministic matcher as the file adapter — the demo must resolve
-    // exactly what the resolve_citation tool description promises.
-    return resolveCitationIn(Object.values(REGULATIONS), text);
+    // Same deterministic matcher as the file adapter — including its refusals,
+    // so the demo declines on the same citations a real corpus declines on.
+    return resolveCitationDetailed(Object.values(REGULATIONS), text);
   },
   async taxonomy() {
     return [...REVIEW_AREAS];

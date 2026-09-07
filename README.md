@@ -1,17 +1,21 @@
 # prudent-mcp
 
 A read-only [MCP](https://modelcontextprotocol.io) server that gives an LLM client structured
-access to the IRB credit-risk model validation knowledge base: regulation, statistical tests,
+access to the IRB credit-risk regulatory knowledge base: regulation, statistical tests,
 supervisor checks, review playbooks, and a registry of the source documents it all derives from.
+
+Anyone whose model has to reason about this material works from the same surface — analysts,
+validators, supervisors, auditors, developers building on top of it.
 
 **[Documentation](https://rhozacc.github.io/prudent-mcp/)** · **[Download](https://github.com/rhozacc/prudent-mcp/releases/latest)**
 
 ## Why
 
-Validating an IRB model means cross-referencing a bank's documentation against a moving target —
-CRR articles, EBA guidelines, ECB guides, supervisor commentary, statistical methodology. An LLM
-is good at that cross-referencing, but only with structured access to the source material.
-Training-data recall is not good enough when the answer has to survive a supervisor.
+Working with an IRB model — building it, reviewing it, supervising it, writing about it — means
+cross-referencing against a moving target: CRR articles, EBA guidelines, ECB guides, supervisor
+commentary, statistical methodology. An LLM is good at that cross-referencing, but only with
+structured access to the source material. Training-data recall is not good enough when the answer
+has to survive a supervisor, and a plausible citation that was never checked is worse than none.
 
 So this server describes; it does not compute. No write tools, no execution, no orchestration.
 That boundary is the design, not a gap.
@@ -61,7 +65,7 @@ bun run build:mcpb     # produces mcpb.mcpb
 ## The corpus
 
 The adapters here return **empty results by default**. This repository is the machinery — schemas,
-tools, traversal, the validator — not the content.
+tools, traversal, the corpus linter — not the content.
 
 `examples/inmemory-demo.ts` seeds a small synthetic slice of PD-calibration content, and is the
 reference implementation for any backend; see the

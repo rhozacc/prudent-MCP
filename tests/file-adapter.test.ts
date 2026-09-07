@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ZodError } from "zod";
 
-import { createFileAdapters, loadCorpusFile, resolveCitationIn } from "../src/file-adapter.ts";
+import {
+  createFileAdapters,
+  loadCorpusFile,
+  resolveCitationDetailed,
+  resolveCitationIn,
+} from "../src/file-adapter.ts";
 import type { Regulation } from "../src/schema.ts";
 
 // The load path deserves a real file: loadCorpusFile is readFileSync + JSON +
@@ -340,16 +345,16 @@ describe("regulation.get(id, asOf) with regulation_history", () => {
   });
 });
 
-// ── resolveCitationIn — the deterministic citation matcher ─────────────────────
+// ── resolveCitationDetailed — the deterministic citation matcher ──────────────
 //
-// Pins the tool-description examples: the old naive substring matcher returned
-// null for its own example "Art. 178(1)(a)".
+// The bar is honesty before recall: a citation this corpus cannot place must
+// come back as null WITH a reason, never as the nearest-numbered provision.
 
-describe("resolveCitationIn", () => {
-  const cite = (id: string, citation: string): Regulation => ({
+describe("resolveCitationDetailed", () => {
+  const cite = (id: string, citation: string, documentId = "crr"): Regulation => ({
     id: id as Regulation["id"],
     framework: id.slice("regulation://".length).split("/")[0]!,
-    document_id: "doc",
+    document_id: documentId,
     document_version: "2024-01-09",
     citation,
     text: "…",
@@ -361,39 +366,146 @@ describe("resolveCitationIn", () => {
     cite("regulation://crr/178/1/b", "CRR Article 178(1)(b)"),
     cite("regulation://crr/180", "CRR Article 180"),
     cite("regulation://crr/180/1/a", "CRR Article 180(1)(a)"),
-    cite("regulation://eba/gl-2017-16/78", "EBA GL 2017/16 paragraph 78"),
+    cite("regulation://eba/gl-2017-16/78", "EBA GL 2017/16 paragraph 78", "eba-gl-2017-16"),
   ];
 
-  it("resolves the resolve_citation description examples", () => {
-    expect(resolveCitationIn(regs, "Art. 178(1)(a)")?.id).toBe("regulation://crr/178/1/a");
-    expect(resolveCitationIn(regs, "CRR Article 180")?.id).toBe("regulation://crr/180");
-    expect(resolveCitationIn(regs, "EBA GL 2017/16 para 78")?.id).toBe("regulation://eba/gl-2017-16/78");
+  it("resolves an exact citation and says the match was exact", () => {
+    const r = resolveCitationDetailed(regs, "Art. 178(1)(a)");
+    expect(r.match?.id).toBe("regulation://crr/178/1/a");
+    expect(r.confidence).toBe("exact");
+    expect(r.ambiguous).toBe(false);
   });
 
-  it("a citation naming a missing node resolves to the closest recorded relative", () => {
-    // No regulation://crr/178 record exists — containment picks the closest
-    // recorded relative (178(1)(a) by normalized-length gap, then corpus order).
-    expect(resolveCitationIn(regs, "CRR Article 178")?.id).toBe("regulation://crr/178/1/a");
+  it("resolves a citation whose document is named in prose", () => {
+    expect(resolveCitationDetailed(regs, "CRR Article 180").match?.id).toBe("regulation://crr/180");
+    expect(resolveCitationDetailed(regs, "EBA GL 2017/16 para 78").match?.id).toBe(
+      "regulation://eba/gl-2017-16/78",
+    );
   });
 
-  it("segment extraction matches article/paragraph/point against id paths", () => {
-    // Fails passes (i)/(ii) — no citation contains this prose — so the numeric
-    // and single-letter tokens ["180","1","a"] match the id path directly,
-    // filtered by the "crr" framework token.
-    expect(resolveCitationIn(regs, "please fetch 180(1)(a) from the crr")?.id).toBe(
-      "regulation://crr/180/1/a",
+  it("strips the document's own numbers before comparing the spine", () => {
+    // "2017" and "16" name the document, not the provision. Scored as part of
+    // the spine they make it ["2017","16","78"], which matches nothing — and a
+    // resolver that then falls through to a looser rule is how fabrication
+    // starts.
+    const r = resolveCitationDetailed(regs, "paragraph 78 of eba-gl-2017-16");
+    expect(r.match?.id).toBe("regulation://eba/gl-2017-16/78");
+    expect(r.confidence).toBe("segment");
+  });
+
+  it("declines a citation naming a node the corpus does not hold, and names the relatives", () => {
+    // No regulation://crr/178 record exists. The old resolver answered this
+    // with 178(1)(a) — a different provision, presented as the one asked for.
+    const r = resolveCitationDetailed(regs, "CRR Article 178");
+    expect(r.match).toBeNull();
+    expect(r.candidates.map((c) => c.id)).toEqual([
+      "regulation://crr/178/1/a",
+      "regulation://crr/178/1/b",
+    ]);
+    expect(r.coverage_note).toContain("narrower");
+  });
+
+  it("declines a near-number instead of resolving it by containment", () => {
+    // "1218" contains "121"; normalized containment used to make that a hit.
+    const r = resolveCitationDetailed(regs, "CRR Article 1808");
+    expect(r.match).toBeNull();
+    expect(r.candidates).toEqual([]);
+    expect(r.unmatched_segments).toEqual(["1808"]);
+  });
+
+  it("declines a citation into an instrument the corpus does not hold", () => {
+    const eba = [regs[4]!];
+    const r = resolveCitationDetailed(eba, "Article 178 of the CRR");
+    expect(r.match).toBeNull();
+    expect(r.coverage_note).toContain("CRR");
+    const foreign = resolveCitationDetailed(regs, "Article 1 of Regulation (EU) No 9999/9999");
+    expect(foreign.match).toBeNull();
+    expect(foreign.coverage_note).toContain("9999/9999");
+  });
+
+  it("reports ambiguity across documents rather than picking one", () => {
+    const twoDocs = [
+      cite("regulation://gl-2017-16/article-78", "Article 78", "eba-gl-2017-16"),
+      cite("regulation://gl-2019-03/article-78", "Article 78", "eba-gl-2019-03"),
+    ];
+    const r = resolveCitationDetailed(twoDocs, "Article 78");
+    expect(r.match).toBeNull();
+    expect(r.ambiguous).toBe(true);
+    expect(r.candidates).toHaveLength(2);
+    expect(r.coverage_note).toContain("2 document");
+    // Naming the document disambiguates without any change to the citation.
+    expect(resolveCitationDetailed(twoDocs, "eba-gl-2019-03 Article 78").match?.id).toBe(
+      "regulation://gl-2019-03/article-78",
+    );
+  });
+
+  it("matches a spine spelled with structural words the record does not use", () => {
+    const egim = [cite("regulation://egim/article-5.12", "Chapter 5, paragraph 12", "egim")];
+    expect(resolveCitationDetailed(egim, "EGIM chapter 5 paragraph 12").match?.id).toBe(
+      "regulation://egim/article-5.12",
+    );
+    expect(resolveCitationDetailed(egim, "egim 5.12").match?.id).toBe(
+      "regulation://egim/article-5.12",
     );
   });
 
   it("returns null for prose that names nothing in the corpus", () => {
+    expect(resolveCitationDetailed(regs, "the general spirit of prudence").match).toBeNull();
+    expect(resolveCitationDetailed(regs, "").match).toBeNull();
     expect(resolveCitationIn(regs, "the general spirit of prudence")).toBeNull();
-    expect(resolveCitationIn(regs, "")).toBeNull();
+  });
+
+  it("matches a declared alias, and says the record's own citation differs", () => {
+    // EBA guidelines number PARAGRAPHS, and their range sits inside the CRR's
+    // article range — so "Article 178" is both a real CRR article and a common
+    // way to cite EBA GL 2017/16 paragraph 178. The alias keeps the loose
+    // spelling resolvable; the confidence level keeps it from being reported as
+    // the record's own citation.
+    const eba = [
+      {
+        ...cite("regulation://gl-2017-16/article-178", "Paragraph 178", "eba-gl-2017-16"),
+        citation_aliases: ["Article 178"],
+      },
+    ];
+    const r = resolveCitationDetailed(eba, "Article 178");
+    expect(r.match?.id).toBe("regulation://gl-2017-16/article-178");
+    expect(r.confidence).toBe("alias");
+    expect(r.coverage_note).toContain("Paragraph 178");
+  });
+
+  it("prefers a record's own citation over another record's alias", () => {
+    const both = [
+      { ...cite("regulation://gl-2017-16/article-178", "Paragraph 178", "eba-gl-2017-16"), citation_aliases: ["Article 178"] },
+      cite("regulation://crr/178", "Article 178", "crr"),
+    ];
+    const r = resolveCitationDetailed(both, "Article 178");
+    expect(r.match?.id).toBe("regulation://crr/178");
+    expect(r.confidence).toBe("exact");
+  });
+
+  it("routes out of the instrument gate when records cite the missing instrument", () => {
+    // A dead end that names the way out: the corpus holds no CRR, but what it
+    // does hold elaborates it, and those records are what was being asked for.
+    const citing = [
+      {
+        ...cite("regulation://gl-2017-16/article-78", "Paragraph 78", "eba-gl-2017-16"),
+        cites: [{ framework: "crr", citation: "Article 178(1)(a)" }],
+      },
+    ];
+    const r = resolveCitationDetailed(citing, "CRR Article 178");
+    expect(r.match).toBeNull();
+    expect(r.coverage_note).toContain("1 records do cite it");
+    expect(r.coverage_note).toContain("get_referrers");
   });
 
   it("is what the file adapter's meta.resolveCitation delegates to", async () => {
     const fa = createFileAdapters(loadCorpusFile(writeCorpus("citations.json", { regulation: regs })));
     const hit = await fa.meta.resolveCitation("Art. 178(1)(a)");
-    expect(hit?.id).toBe("regulation://crr/178/1/a");
+    expect(hit.match?.id).toBe("regulation://crr/178/1/a");
+    expect(hit.confidence).toBe("exact");
+    const declined = await fa.meta.resolveCitation("CRR Article 178");
+    expect(declined.match).toBeNull();
+    expect(declined.candidates).toHaveLength(2);
   });
 });
 

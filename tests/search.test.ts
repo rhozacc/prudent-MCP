@@ -36,11 +36,21 @@ const regulation = (id: string, citation: string, text: string): Regulation => (
 });
 
 describe("tokenize", () => {
-  it("lowercases, splits on non-alphanumerics, and drops empties", () => {
+  it("lowercases, splits on non-alphanumerics, drops empties and stopwords", () => {
     expect(tokenize("Long-Run  Average (LRA)!")).toEqual(["long", "run", "average", "lra"]);
-    expect(tokenize("regulation://crr/180/1/a")).toEqual(["regulation", "crr", "180", "1", "a"]);
+    // "a" is a stopword and goes; the digit segments stay, because a citation's
+    // article and paragraph numbers are the whole point of a URI-shaped query.
+    expect(tokenize("regulation://crr/180/1/a")).toEqual(["regulation", "crr", "180", "1"]);
     expect(tokenize("   ")).toEqual([]);
     expect(tokenize("")).toEqual([]);
+  });
+
+  it("drops stopwords, which is what stops them dominating coverage", () => {
+    // "of" used to be scored, and it substring-matches almost immediately in
+    // any English text — so every record earned a free point of coverage, the
+    // primary sort key, and the excerpt window pinned to the head of the text.
+    expect(tokenize("margin of conservatism")).toEqual(["margin", "conservatism"]);
+    expect(tokenize("the of and to")).toEqual(["the", "of", "and", "to"]); // all-stopword: falls back
   });
 });
 
@@ -68,7 +78,12 @@ describe("rankedSearch", () => {
     const substringOnly = check("check://w/sub", "The recalibrations check", "x.");
     const results = rankedSearch([substringOnly, wholeWord], "calibration", checkSearchFields);
     expect(results.map((m) => m.record.id)).toEqual(["check://w/whole", "check://w/sub"]);
-    expect(results[0]!.score).toBe(2 * results[1]!.score); // substring counts half
+    expect(results[0]!.score).toBe(4 * results[1]!.score); // substring counts a quarter
+
+    // And only the whole-word match establishes coverage: a record that merely
+    // contains the letters must not tie on the primary sort key.
+    expect(results[0]!.coverage).toBe(1);
+    expect(results[1]!.coverage).toBe(0);
   });
 
   it("ties break by input order, so ranking is fully deterministic", () => {
@@ -84,9 +99,12 @@ describe("rankedSearch", () => {
     ]);
   });
 
-  it("caps at 20 results by default and honours an explicit limit", () => {
+  it("ranks everything by default and honours an explicit limit", () => {
     const many = Array.from({ length: 25 }, (_, i) => check(`check://cap/${i}`, "Calibration", "x."));
-    expect(rankedSearch(many, "calibration", checkSearchFields)).toHaveLength(20);
+    // Uncapped: this used to slice to 20 before the tool layer counted, which
+    // made total_matches report a page size on every query of every surface.
+    // Paging is the tool layer's job; ranking returns everything it ranked.
+    expect(rankedSearch(many, "calibration", checkSearchFields)).toHaveLength(25);
     expect(rankedSearch(many, "calibration", checkSearchFields, 3)).toHaveLength(3);
   });
 
@@ -108,8 +126,22 @@ describe("rankedSearch", () => {
     const [ml] = rankedSearch([long], "calibration", checkSearchFields);
     expect(ml!.matched.field).toBe("expectation");
     expect(ml!.matched.excerpt).toContain("calibration");
-    expect(ml!.matched.excerpt.length).toBeLessThanOrEqual(122); // ~120-char window + ellipses
+    // 340-char window + up to 220 chars of sentence snap at each end + ellipses.
+    expect(ml!.matched.excerpt.length).toBeLessThanOrEqual(782);
     expect(ml!.matched.excerpt.startsWith("…")).toBe(true);
+
+    // The window centres on the match rather than the head of the text, and is
+    // wide enough to carry the clause — an excerpt that cannot be quoted is a
+    // pointer, and forces a second call to open the record.
+    expect(ml!.matched.excerpt).toContain("The calibration target sits here.");
+
+    // It also STARTS and ENDS on sentence boundaries. This is the difference
+    // between context and a pointer: an excerpt cut mid-clause cannot be quoted
+    // or reasoned from, so the caller opens the full record anyway and the
+    // excerpt has cost tokens for nothing.
+    const body = ml!.matched.excerpt.replace(/^…/, "").replace(/…$/, "");
+    expect(body).toMatch(/[.!?]$/);
+    expect(body[0]).toBe(body[0]!.toUpperCase());
   });
 });
 

@@ -18,7 +18,7 @@ Ranked, field-scoped search across the catalog of described statistical tests: n
 | `limit` / `offset` | `number` | Optional paging (default 20 per page) |
 | `detail` | `"concise" \| "full"` | Optional, default `"concise"` |
 
-**Returns:** the shared envelope `{ results, total_matches, offset, truncated }`. Concise results are `{ id, name, family, purpose_first_sentence }`; `detail: "full"` serves complete records.
+**Returns:** the shared envelope `{ results, returned, total_matches, offset, truncated, next_offset }`. Concise results are `{ id, name, family, purpose_first_sentence }`; `detail: "full"` serves complete records.
 
 Particularly useful for matching bank-specific test names to corpus entries — banks often use variant names for the same underlying method, and `aliases` is weighted like `name`. The `family` field is the equivalence key.
 

@@ -27,16 +27,27 @@ export function createServer(): McpServer {
     },
     {
       instructions:
-        "IRB credit-risk model validation knowledge layer — read-only; the server describes, computation happens elsewhere.\n" +
+        // Not "for validators": the surface is the same whether the caller is an
+        // analyst, a validator, a supervisor, a developer or an auditor. Naming
+        // one of them narrows what a model believes it may be asked.
+        "IRB credit-risk regulatory knowledge layer — read-only; the server describes, computation happens elsewhere.\n" +
         "Five surfaces with matching URI schemes: regulation:// test:// check:// playbook:// source://.\n" +
         "Entry path: get_corpus_info → list_review_areas → get_area_overview(area) for the one-shot bundle of a review area.\n" +
         "Traversal: expand_playbook / expand_regulation (references resolved inline), get_regulation_tree (dossier walk, " +
         "200-node cap), get_referrers (the reverse index), get_coverage_gaps (its aggregate inverse).\n" +
         "Conventions: search_* and traversal tools are concise by default — pass detail: 'full' for complete records; " +
-        "search_* return { results, total_matches, offset, truncated }.\n" +
+        "search_* return { results, returned, total_matches, offset, truncated, next_offset, notice }. total_matches " +
+        "is the whole match set, not the page: page with next_offset until it is null before concluding anything is " +
+        "absent. Responses are size-capped — a shortened page or a summary served in place of detail: 'full' says so " +
+        "in `notice`, and nothing is ever dropped silently.\n" +
+        "Concise search results carry a quotable excerpt (whole sentences around the match); quote it rather than " +
+        "re-fetching the record to confirm a hit.\n" +
         "Misses come back as isError results pointing at the right search/list tool — never a bare 'null'.\n" +
         "Regulation is the only versioned surface: pass as_of (ISO date) for the text in force on that date; backends " +
         "without history serve current text, and an as_of predating all recorded versions is a miss.\n" +
+        "resolve_citation declines rather than guesses: a citation naming an instrument or provision this corpus does " +
+        "not hold comes back with match null plus candidates and a coverage_note. A null match is not a citation — " +
+        "never present one as though the text were found.\n" +
         "Sources are the currency registry (verified dates, supersession, milestones); they join regulation via " +
         "framework + document_id, never by URI reference.\n" +
         // Guidance, not enforcement: instructions are advisory and no string here can
