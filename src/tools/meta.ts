@@ -343,8 +343,12 @@ export function registerMetaTools(server: McpServer): void {
       description:
         "The computed reverse index: everything that references this ID through a typed " +
         "cross-surface reference (parent/children, derived_from, regulatory_basis, " +
-        "regulatory_scope, playbook phase references). Returns { regulation: [...], " +
-        "tests: [...], checks: [...], playbooks: [...] }. Accepts regulation://, test://, " +
+        "regulatory_scope, playbook phase references). Returns { regulation, tests, checks, " +
+        "playbooks, primary: { tests, checks } }, where `primary` is the subset naming this " +
+        "provision as the one it RESTATES rather than the span it was traced to — " +
+        "derived_from is commonly a whole section, so the flat lists can return the same " +
+        "answer for every article in it. Prefer `primary` when it is non-empty. Accepts " +
+        "regulation://, test://, " +
         "check://, playbook:// ids — source:// ids error (sources sit outside the reference " +
         "graph; they join via document_id). Resolve returned ids with the matching get_* tool.",
       inputSchema: {

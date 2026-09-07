@@ -328,11 +328,20 @@ export function resolveCitationDetailed(
   // miss, it is a different body of law.
   const instrument = namedInstrument(text);
   if (instrument !== null && !corpusHolds(regulations, instrument)) {
+    // A dead end that names the way out. The corpus does not hold the CRR, but
+    // most of what it does hold elaborates it — so the records CITING the
+    // instrument are the answer to what was almost certainly being asked.
+    const citing = regulations.filter((r) =>
+      (r.cites ?? []).some((c) => citationTokens(c.framework).join("") === instrument),
+    ).length;
     return none({
       coverage_note:
         `This corpus holds no ${instrumentLabel(instrument)}. Nothing was matched, rather than ` +
-        "sourcing a same-numbered provision from another document. Use get_corpus_info for the " +
-        "documents actually loaded.",
+        "sourcing a same-numbered provision from another document. " +
+        (citing > 0
+          ? `${citing} records do cite it — search_regulation with the provision number, or ` +
+            "get_referrers on one of those records, to reach what elaborates it."
+          : "Use get_corpus_info for the documents actually loaded."),
     });
   }
 
@@ -353,6 +362,31 @@ export function resolveCitationDetailed(
     return { ...none(), match: exactHits[0] ?? null, confidence: "exact" };
   }
   if (exactHits.length > 1) return ambiguousResolution(text, exactHits);
+
+  // (i-alias) The same equality against a record's declared aliases.
+  //
+  // Kept as its own pass, and its own confidence level, rather than folded into
+  // (i): the caller asked for a label this record does not carry. EBA
+  // guidelines number PARAGRAPHS, so "Article 178" is a common way to cite one
+  // and also a real CRR article — the alias makes the loose spelling resolvable
+  // without letting it be reported as the record's citation.
+  const aliasHits = pool.filter((r) =>
+    (r.citation_aliases ?? []).some((a) => bare(citationTokens(a)).join("") === nq),
+  );
+  if (aliasHits.length === 1) {
+    const hit = aliasHits[0];
+    return {
+      ...none(),
+      match: hit ?? null,
+      confidence: "alias",
+      coverage_note:
+        hit === undefined
+          ? undefined
+          : `Matched an alias. This record's own citation is "${hit.citation}" — quote that, ` +
+            `not "${text}".`,
+    };
+  }
+  if (aliasHits.length > 1) return ambiguousResolution(text, aliasHits);
 
   // (ii) Spine equality: the numbers alone, however the citation spells the
   // structure around them.

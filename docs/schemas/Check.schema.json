@@ -19,6 +19,13 @@
           },
           "default": []
         },
+        "primary_basis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^regulation:\\/\\/.+"
+          }
+        },
         "parent": {
           "type": "string",
           "pattern": "^regulation:\\/\\/.+"

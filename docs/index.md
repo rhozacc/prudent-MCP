@@ -60,7 +60,7 @@ Other hosts and manual JSON config: [Client integrations](/guide/clients).
 | [Guide](/guide/) | Introduction, domain concepts, quickstart, architecture, client wiring, FAQ |
 | [Tools](/tools/) | All 19 tools — arguments, return shapes, worked calls |
 | [Corpus structure](/corpus/) | URI schemes, record shapes, versioning, cross-reference rules |
-| [Schema reference](/corpus/schemas) | Generated field-level reference for all 12 schemas |
+| [Schema reference](/corpus/schemas) | Generated field-level reference for all 13 schemas |
 | [Corpus graph](/corpus/graph) | How the surfaces reference each other |
 | [Examples](/examples/) | End-to-end sessions against the demo corpus |
 

@@ -455,6 +455,49 @@ describe("resolveCitationDetailed", () => {
     expect(resolveCitationIn(regs, "the general spirit of prudence")).toBeNull();
   });
 
+  it("matches a declared alias, and says the record's own citation differs", () => {
+    // EBA guidelines number PARAGRAPHS, and their range sits inside the CRR's
+    // article range — so "Article 178" is both a real CRR article and a common
+    // way to cite EBA GL 2017/16 paragraph 178. The alias keeps the loose
+    // spelling resolvable; the confidence level keeps it from being reported as
+    // the record's own citation.
+    const eba = [
+      {
+        ...cite("regulation://gl-2017-16/article-178", "Paragraph 178", "eba-gl-2017-16"),
+        citation_aliases: ["Article 178"],
+      },
+    ];
+    const r = resolveCitationDetailed(eba, "Article 178");
+    expect(r.match?.id).toBe("regulation://gl-2017-16/article-178");
+    expect(r.confidence).toBe("alias");
+    expect(r.coverage_note).toContain("Paragraph 178");
+  });
+
+  it("prefers a record's own citation over another record's alias", () => {
+    const both = [
+      { ...cite("regulation://gl-2017-16/article-178", "Paragraph 178", "eba-gl-2017-16"), citation_aliases: ["Article 178"] },
+      cite("regulation://crr/178", "Article 178", "crr"),
+    ];
+    const r = resolveCitationDetailed(both, "Article 178");
+    expect(r.match?.id).toBe("regulation://crr/178");
+    expect(r.confidence).toBe("exact");
+  });
+
+  it("routes out of the instrument gate when records cite the missing instrument", () => {
+    // A dead end that names the way out: the corpus holds no CRR, but what it
+    // does hold elaborates it, and those records are what was being asked for.
+    const citing = [
+      {
+        ...cite("regulation://gl-2017-16/article-78", "Paragraph 78", "eba-gl-2017-16"),
+        cites: [{ framework: "crr", citation: "Article 178(1)(a)" }],
+      },
+    ];
+    const r = resolveCitationDetailed(citing, "CRR Article 178");
+    expect(r.match).toBeNull();
+    expect(r.coverage_note).toContain("1 records do cite it");
+    expect(r.coverage_note).toContain("get_referrers");
+  });
+
   it("is what the file adapter's meta.resolveCitation delegates to", async () => {
     const fa = createFileAdapters(loadCorpusFile(writeCorpus("citations.json", { regulation: regs })));
     const hit = await fa.meta.resolveCitation("Art. 178(1)(a)");

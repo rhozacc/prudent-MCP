@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { adapters } from "../adapters.ts";
 import type { Regulation } from "../schema.ts";
-import { RegulationSchema, regulationIdSchema } from "../schema.ts";
+import { ProvisionKindSchema, RegulationSchema, regulationIdSchema } from "../schema.ts";
 import { rankedSearch, regulationSearchFields } from "../search.ts";
 import {
   READ_ONLY_HINTS,
@@ -23,9 +23,17 @@ import {
 const ConciseRegulationHit = z.object({
   id: regulationIdSchema,
   citation: z.string(),
-  matched_excerpt: z.string().optional().describe("~120-char window around the best match"),
+  matched_excerpt: z
+    .string()
+    .optional()
+    .describe("Whole sentences around the best match — quotable as it stands."),
   document_id: z.string(),
   parent: regulationIdSchema.optional(),
+  // Two fields worth ~20 characters between them and otherwise costing a fetch
+  // each: whether this row is a section or the provision inside it, and whether
+  // it states a requirement or guidance.
+  kind: ProvisionKindSchema.optional(),
+  obligation: z.enum(["must", "should", "may", "none"]).optional(),
 });
 
 /**
@@ -101,6 +109,8 @@ export function registerRegulationTools(server: McpServer): void {
           ...(excerpt !== undefined ? { matched_excerpt: excerpt } : {}),
           document_id: r.document_id,
           ...(r.parent !== undefined ? { parent: r.parent } : {}),
+          ...(r.kind !== undefined ? { kind: r.kind } : {}),
+          ...(r.obligation !== undefined ? { obligation: r.obligation } : {}),
         };
       });
       return searchResult(paginate(concise, limit, offset));

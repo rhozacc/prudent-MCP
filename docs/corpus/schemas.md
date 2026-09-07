@@ -86,6 +86,67 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
             ]
           },
           "default": []
+        },
+        "citation_aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "article",
+            "paragraph",
+            "point",
+            "section",
+            "chapter",
+            "annex"
+          ]
+        },
+        "obligation": {
+          "type": "string",
+          "enum": [
+            "must",
+            "should",
+            "may",
+            "none"
+          ]
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "anchor": {
+          "type": "string"
+        },
+        "is_metadata_only": {
+          "type": "boolean"
+        },
+        "cites": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "framework": {
+                "type": "string"
+              },
+              "citation": {
+                "type": "string"
+              },
+              "document_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "framework",
+              "citation"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -146,6 +207,13 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
           },
           "default": []
         },
+        "primary_basis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^regulation:\\/\\/.+"
+          }
+        },
         "parent": {
           "type": "string",
           "pattern": "^regulation:\\/\\/.+"
@@ -194,6 +262,13 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
             "pattern": "^regulation:\\/\\/.+"
           },
           "default": []
+        },
+        "primary_basis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^regulation:\\/\\/.+"
+          }
         },
         "parent": {
           "type": "string",
@@ -690,6 +765,32 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
             "pattern": "^playbook:\\/\\/.+"
           },
           "default": []
+        },
+        "primary": {
+          "type": "object",
+          "properties": {
+            "tests": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^test:\\/\\/.+"
+              },
+              "default": []
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^check:\\/\\/.+"
+              },
+              "default": []
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "tests": [],
+            "checks": []
+          }
         }
       },
       "additionalProperties": false
@@ -782,6 +883,67 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
                     ]
                   },
                   "default": []
+                },
+                "citation_aliases": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "article",
+                    "paragraph",
+                    "point",
+                    "section",
+                    "chapter",
+                    "annex"
+                  ]
+                },
+                "obligation": {
+                  "type": "string",
+                  "enum": [
+                    "must",
+                    "should",
+                    "may",
+                    "none"
+                  ]
+                },
+                "pages": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "anchor": {
+                  "type": "string"
+                },
+                "is_metadata_only": {
+                  "type": "boolean"
+                },
+                "cites": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "framework": {
+                        "type": "string"
+                      },
+                      "citation": {
+                        "type": "string"
+                      },
+                      "document_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "framework",
+                      "citation"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               },
               "required": [
@@ -804,6 +966,7 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
           "enum": [
             "exact",
             "segment",
+            "alias",
             "none"
           ]
         },
@@ -850,6 +1013,39 @@ Each block is the JSON Schema (draft-07) for one corpus type. Expand to read the
       "required": [
         "match",
         "confidence"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
+```
+
+</details>
+
+<details>
+<summary><code>ExternalCitation</code></summary>
+
+```json
+{
+  "$ref": "#/definitions/ExternalCitation",
+  "definitions": {
+    "ExternalCitation": {
+      "type": "object",
+      "properties": {
+        "framework": {
+          "type": "string"
+        },
+        "citation": {
+          "type": "string"
+        },
+        "document_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "framework",
+        "citation"
       ],
       "additionalProperties": false
     }

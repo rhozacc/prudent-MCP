@@ -35,6 +35,32 @@
             "pattern": "^playbook:\\/\\/.+"
           },
           "default": []
+        },
+        "primary": {
+          "type": "object",
+          "properties": {
+            "tests": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^test:\\/\\/.+"
+              },
+              "default": []
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^check:\\/\\/.+"
+              },
+              "default": []
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "tests": [],
+            "checks": []
+          }
         }
       },
       "additionalProperties": false

@@ -12,6 +12,12 @@
  *   - check:      `derived_from` or `parent`
  *   - playbook:   `regulatory_scope` or any `phases[].references` entry
  *
+ * `primary` splits out the checks/tests naming `id` in their optional
+ * `primary_basis` — the provision they restate, as against the span they were
+ * traced to. Without it the index cannot discriminate: `derived_from` commonly
+ * names a whole section, so every article in that section gets an identical
+ * answer.
+ *
  * The mirror invariant (CLAUDE.md) makes the `children` scan mostly redundant
  * with the child-side scans for well-formed corpora, but scanning both sides
  * keeps the index truthful on corpora the linter hasn't blessed.
@@ -58,5 +64,13 @@ export function computeReferrers(input: ReferrersInput, id: string): Referrers {
           p.phases.some((ph) => ph.references.includes(asAny)),
       )
       .map((p) => p.id),
+    primary: {
+      tests: input.tests
+        .filter((t) => t.primary_basis?.includes(asRegulation) === true)
+        .map((t) => t.id),
+      checks: input.checks
+        .filter((c) => c.primary_basis?.includes(asRegulation) === true)
+        .map((c) => c.id),
+    },
   };
 }

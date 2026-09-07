@@ -146,7 +146,13 @@ const emptyMeta: MetaAdapter = {
     };
   },
   async referrers() {
-    return { regulation: [], tests: [], checks: [], playbooks: [] };
+    return {
+      regulation: [],
+      tests: [],
+      checks: [],
+      playbooks: [],
+      primary: { tests: [], checks: [] },
+    };
   },
   async resolveCitation() {
     return {
